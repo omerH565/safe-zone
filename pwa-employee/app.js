@@ -32,11 +32,27 @@ function initApp() {
     const urlParams = new URLSearchParams(window.location.search);
     const joinGroupId = urlParams.get('join');
 
-    auth.onAuthStateChanged(user => {
+    auth.onAuthStateChanged(async user => {
         if (user) {
             currentUserId = user.uid;
             currentUserName = user.displayName || "משתמש";
             
+            // --- התיקון: סנכרון הנתונים מהשרת למקרה שזה PWA חדש או מכשיר אחר ---
+            try {
+                const response = await fetch(`${SERVER_URL}/api/user/${currentUserId}`);
+                const result = await response.json();
+                if (result.success && result.data) {
+                    userGroups = result.data.groups || [];
+                    userCities = result.data.targetCities || [];
+                    // עדכון הזיכרון המקומי כדי שהאפליקציה לא תשכח
+                    localStorage.setItem('safeZone_groups', JSON.stringify(userGroups));
+                    localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
+                }
+            } catch (err) {
+                console.error("Error fetching user data from DB:", err);
+            }
+            // -------------------------------------------------------------------
+
             if (userCities.length === 0) {
                 onboardingModal.classList.remove('hidden');
                 authSection.classList.add('hidden');
@@ -56,7 +72,6 @@ function initApp() {
         }
     });
 
-    // התחברות עם גוגל
     document.getElementById('btn-google-login').addEventListener('click', () => {
         const provider = new firebase.auth.GoogleAuthProvider();
         auth.signInWithPopup(provider).catch(error => {
@@ -65,12 +80,10 @@ function initApp() {
         });
     });
 
-    // --- חדש: התחברות עם פייסבוק ---
     document.getElementById('btn-facebook-login').addEventListener('click', () => {
         const provider = new firebase.auth.FacebookAuthProvider();
         auth.signInWithPopup(provider).catch(error => {
             console.error("Facebook Login failed:", error);
-            // אם לפייסבוק וגוגל יש את אותו מייל - פיירבייס עלול לזרוק שגיאה שדורשת לקשר את החשבונות
             if (error.code === 'auth/account-exists-with-different-credential') {
                 alert("המייל הזה כבר מחובר דרך גוגל! אנא התחבר דרך גוגל.");
             } else {
@@ -78,7 +91,6 @@ function initApp() {
             }
         });
     });
-    // ---------------------------------
 
     document.getElementById('btn-start').addEventListener('click', () => {
         const selectedCities = Array.from(document.querySelectorAll('#city-selector input:checked')).map(cb => cb.value);

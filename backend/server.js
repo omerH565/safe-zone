@@ -142,6 +142,22 @@ io.on('connection', (socket) => {
     });
 });
 
+// --- נתיב חדש: שליפת נתוני משתמש לסנכרון PWA ---
+app.get('/api/user/:userId', async (req, res) => {
+    try {
+        const doc = await db.collection('users').doc(req.params.userId).get();
+        if (doc.exists) {
+            res.json({ success: true, data: doc.data() });
+        } else {
+            res.json({ success: true, data: null });
+        }
+    } catch (err) {
+        console.error("Error fetching user:", err);
+        res.status(500).json({ error: 'Database error' });
+    }
+});
+// ------------------------------------------------
+
 app.post('/api/register-push', async (req, res) => {
     const { userId, token } = req.body;
     if (userId && token) {
