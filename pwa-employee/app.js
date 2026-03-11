@@ -19,6 +19,10 @@ let userGroups = JSON.parse(localStorage.getItem('safeZone_groups') || '[]');
 let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '[]');
 let currentTimer; 
 
+// משתנים זמניים למסכי ההגדרות
+let tempOnboardingCities = [];
+let tempSettingsCities = [];
+
 const onboardingModal = document.getElementById('onboarding-modal');
 const authSection = document.getElementById('auth-section');
 const setupSection = document.getElementById('setup-section');
@@ -27,6 +31,34 @@ const mainApp = document.getElementById('main-app');
 const greetingTitle = document.getElementById('greeting-title');
 const groupsList = document.getElementById('groups-list');
 const noGroupsMsg = document.getElementById('no-groups-msg');
+
+// פונקציית עזר לרינדור תגיות הערים
+function renderCityTags(citiesArray, containerId, removeCallback) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    
+    if(citiesArray.length === 0) {
+        container.innerHTML = '<span style="color: #6b7280; font-size: 0.85rem; width: 100%; text-align: center;">לא נבחרו אזורים. הוסף יישוב.</span>';
+        return;
+    }
+
+    citiesArray.forEach((city, index) => {
+        const tag = document.createElement('div');
+        tag.className = 'city-tag';
+        tag.innerHTML = `
+            <span>${city}</span>
+            <span class="city-tag-remove" data-index="${index}">&times;</span>
+        `;
+        container.appendChild(tag);
+    });
+
+    container.querySelectorAll('.city-tag-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.getAttribute('data-index'));
+            removeCallback(index);
+        });
+    });
+}
 
 function initApp() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -37,23 +69,25 @@ function initApp() {
             currentUserId = user.uid;
             currentUserName = user.displayName || "משתמש";
             
-            // --- התיקון: סנכרון הנתונים מהשרת למקרה שזה PWA חדש או מכשיר אחר ---
             try {
                 const response = await fetch(`${SERVER_URL}/api/user/${currentUserId}`);
                 const result = await response.json();
                 if (result.success && result.data) {
                     userGroups = result.data.groups || [];
                     userCities = result.data.targetCities || [];
-                    // עדכון הזיכרון המקומי כדי שהאפליקציה לא תשכח
                     localStorage.setItem('safeZone_groups', JSON.stringify(userGroups));
                     localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
                 }
             } catch (err) {
                 console.error("Error fetching user data from DB:", err);
             }
-            // -------------------------------------------------------------------
 
             if (userCities.length === 0) {
+                tempOnboardingCities = [];
+                renderCityTags(tempOnboardingCities, 'onboarding-city-tags', (idx) => {
+                    tempOnboardingCities.splice(idx, 1);
+                    renderCityTags(tempOnboardingCities, 'onboarding-city-tags', arguments.callee);
+                });
                 onboardingModal.classList.remove('hidden');
                 authSection.classList.add('hidden');
                 setupSection.classList.remove('hidden');
@@ -83,7 +117,6 @@ function initApp() {
     document.getElementById('btn-facebook-login').addEventListener('click', () => {
         const provider = new firebase.auth.FacebookAuthProvider();
         auth.signInWithPopup(provider).catch(error => {
-            console.error("Facebook Login failed:", error);
             if (error.code === 'auth/account-exists-with-different-credential') {
                 alert("המייל הזה כבר מחובר דרך גוגל! אנא התחבר דרך גוגל.");
             } else {
@@ -92,13 +125,27 @@ function initApp() {
         });
     });
 
+    // הוספת עיר במסך ההתחלה
+    document.getElementById('btn-add-onboarding-city').addEventListener('click', () => {
+        const input = document.getElementById('onboarding-city-input');
+        const city = input.value.trim();
+        if (city && !tempOnboardingCities.includes(city)) {
+            tempOnboardingCities.push(city);
+            renderCityTags(tempOnboardingCities, 'onboarding-city-tags', (idx) => {
+                tempOnboardingCities.splice(idx, 1);
+                renderCityTags(tempOnboardingCities, 'onboarding-city-tags', arguments.callee);
+            });
+            input.value = '';
+        }
+    });
+
+    // כפתור הסיום במסך ההתחלה
     document.getElementById('btn-start').addEventListener('click', () => {
-        const selectedCities = Array.from(document.querySelectorAll('#city-selector input:checked')).map(cb => cb.value);
-        if (selectedCities.length === 0) {
-            alert('אנא בחר לפחות אזור התרעה אחד');
+        if (tempOnboardingCities.length === 0) {
+            alert('אנא הוסף לפחות אזור התרעה אחד (למשל: תל אביב, רינתיה)');
             return;
         }
-        userCities = selectedCities;
+        userCities = tempOnboardingCities;
         localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
 
         onboardingModal.classList.add('hidden');
@@ -110,13 +157,31 @@ function initApp() {
     });
 }
 
+// פתיחת מסך הגדרות
 document.getElementById('btn-settings').addEventListener('click', () => {
     document.getElementById('settings-username-display').innerText = `מחובר כ: ${currentUserName}`;
-    const checkboxes = document.querySelectorAll('#settings-city-selector input');
-    checkboxes.forEach(cb => {
-        cb.checked = userCities.includes(cb.value);
+    tempSettingsCities = [...userCities]; // העתקת המערך הנוכחי למערך זמני
+    
+    renderCityTags(tempSettingsCities, 'settings-city-tags', (idx) => {
+        tempSettingsCities.splice(idx, 1);
+        renderCityTags(tempSettingsCities, 'settings-city-tags', arguments.callee);
     });
+    
     settingsModal.classList.remove('hidden');
+});
+
+// הוספת עיר במסך ההגדרות
+document.getElementById('btn-add-settings-city').addEventListener('click', () => {
+    const input = document.getElementById('settings-city-input');
+    const city = input.value.trim();
+    if (city && !tempSettingsCities.includes(city)) {
+        tempSettingsCities.push(city);
+        renderCityTags(tempSettingsCities, 'settings-city-tags', (idx) => {
+            tempSettingsCities.splice(idx, 1);
+            renderCityTags(tempSettingsCities, 'settings-city-tags', arguments.callee);
+        });
+        input.value = '';
+    }
 });
 
 document.getElementById('btn-close-settings').addEventListener('click', () => {
@@ -129,13 +194,13 @@ document.getElementById('btn-logout').addEventListener('click', () => {
     });
 });
 
+// שמירת ההגדרות
 document.getElementById('btn-save-settings').addEventListener('click', () => {
-    const newCities = Array.from(document.querySelectorAll('#settings-city-selector input:checked')).map(cb => cb.value);
-    if (newCities.length === 0) {
-        alert('חובה לבחור לפחות עיר אחת');
+    if (tempSettingsCities.length === 0) {
+        alert('חובה לבחור לפחות עיר אחת במועדפים');
         return;
     }
-    userCities = newCities;
+    userCities = tempSettingsCities;
     localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
     
     socket.emit('update_settings', {

@@ -6,7 +6,7 @@
     --primary: #ef4444; /* red-500 */
     --green: #22c55e; /* green-500 */
     --yellow: #eab308; /* yellow-500 */
-    --blue: #3b82f6; /* blue-500 for install banner */
+    --blue: #3b82f6; /* blue-500 */
 }
 
 body {
@@ -56,6 +56,7 @@ body {
 .btn-green { background-color: var(--green); color: white; }
 .btn-yellow { background-color: var(--yellow); color: #111827; }
 .btn-red { background-color: var(--primary); color: white; }
+.btn-blue { background-color: var(--blue); color: white; }
 
 .modal {
     position: fixed;
@@ -142,7 +143,6 @@ body {
     100% { opacity: 1; }
 }
 
-/* --- עיצוב באנר הוספה למסך הבית --- */
 .install-banner {
     background-color: var(--blue);
     color: white;
@@ -154,7 +154,7 @@ body {
     text-align: right;
     border: 1px solid #1d4ed8;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    animation: wiggle 2.5s infinite; /* אנימציה עדינה למשיכת תשומת לב */
+    animation: wiggle 2.5s infinite;
 }
 
 .install-banner-content {
@@ -171,7 +171,6 @@ body {
     vertical-align: middle;
 }
 
-/* אנימציית רטט עדינה למשיכת תשומת לב לבאנר */
 @keyframes wiggle {
     0% { transform: rotate(0); }
     1% { transform: rotate(1deg); }
@@ -180,3 +179,40 @@ body {
     4% { transform: rotate(0); }
     100% { transform: rotate(0); }
 }
+
+/* --- חדש: מערכת תגיות הערים --- */
+.city-tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    min-height: 40px;
+    background: var(--bg-dark);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #4b5563;
+}
+
+.city-tag {
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid #6b7280;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.city-tag-remove {
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: bold;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+.city-tag-remove:hover {
+    color: #f87171;
+}
+/* -------------------------------- */
