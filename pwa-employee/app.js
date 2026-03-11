@@ -5,6 +5,7 @@ let currentUserId = localStorage.getItem('safeZone_userId');
 let currentUserName = localStorage.getItem('safeZone_userName');
 let userGroups = JSON.parse(localStorage.getItem('safeZone_groups') || '[]');
 let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '["תל אביב - מרכז"]');
+let currentTimer; // משתנה לשמירת הטיימר כדי שנוכל לאפס אותו
 
 const onboardingModal = document.getElementById('onboarding-modal');
 const mainApp = document.getElementById('main-app');
@@ -27,7 +28,6 @@ function initApp() {
                 return;
             }
             
-            // שליפת כל הערים שסומנו
             const selectedCities = Array.from(document.querySelectorAll('#city-selector input:checked')).map(cb => cb.value);
             if (selectedCities.length === 0) {
                 alert('אנא בחר לפחות אזור התרעה אחד');
@@ -144,9 +144,16 @@ window.copyInviteLink = function(groupId) {
     });
 };
 
+// --- התיקון: איפוס מסך המשתמש באזעקה חדשה ---
 socket.on('new_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
         document.getElementById('alert-banner').classList.remove('hidden');
+        
+        // החזרת כפתורי הדיווח והסתרת מסך הסיום הקודם
+        document.querySelector('.action-buttons').classList.remove('hidden');
+        document.getElementById('status-message').classList.add('hidden');
+        document.getElementById('btn-arrived').classList.add('hidden');
+        
         startTimer(90);
     }
 });
@@ -203,15 +210,17 @@ async function reportStatus(status) {
 }
 
 function startTimer(seconds) {
+    if (currentTimer) clearInterval(currentTimer); // מנקה טיימר קודם אם יש אזעקה רודפת אזעקה
+    
     const timerDisplay = document.getElementById('timer');
     let timeLeft = seconds;
     
-    const countdown = setInterval(() => {
+    currentTimer = setInterval(() => {
         timeLeft--;
         timerDisplay.innerText = `זמן להתגוננות: ${timeLeft} שניות`;
         
         if (timeLeft <= 0) {
-            clearInterval(countdown);
+            clearInterval(currentTimer);
             timerDisplay.innerText = "הישארו במרחב המוגן!";
         }
     }, 1000);

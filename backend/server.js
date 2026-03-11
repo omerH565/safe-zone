@@ -23,7 +23,6 @@ const io = new Server(server, {
 const usersStatus = new Map();
 const userPushTokens = new Map();
 
-// מילון שמתרגם פוליגונים נקודתיים למרחב הכללי שלהם
 const regionsMap = {
     "תל אביב - מרכז": "דן",
     "תל אביב - מזרח": "דן",
@@ -33,7 +32,6 @@ const regionsMap = {
     "גבעתיים": "דן"
 };
 
-// פונקציה שמוסיפה את המרחב הרחב (למשל "דן") אוטומטית לרשימת המעקב של המשתמש
 function deriveAlertAreas(cities) {
     if (!cities || !Array.isArray(cities)) return [];
     const areas = new Set(cities);
@@ -139,6 +137,7 @@ app.post('/api/register-push', (req, res) => {
     }
 });
 
+// --- המוח שמקשיב לפיקוד העורף ---
 const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
 const OREF_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -166,6 +165,18 @@ async function pollOrefApi() {
                 const userId = doc.id;
                 const userRecord = doc.data();
                 
+                usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
+                
+                const userGroups = userRecord.groups || [];
+                userGroups.forEach(group => {
+                    io.to(group).emit('group_member_status', { 
+                        userId: userId, 
+                        name: userRecord.name, 
+                        status: 'pending', 
+                        groupId: group 
+                    });
+                });
+                
                 io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
 
                 const userPushToken = userPushTokens.get(userId);
@@ -183,11 +194,49 @@ async function pollOrefApi() {
             });
         }
     } catch (error) {
-        // התעלמות משגיאות רשת
+        // התעלמות משגיאות רשת שוטפות של פיקוד העורף (קורה הרבה מחו"ל)
     }
 }
 
 setInterval(pollOrefApi, 1000);
+
+// --- נתיב חדש: סימולטור אזעקות לבדיקת המערכת! ---
+app.get('/api/simulate-alert', async (req, res) => {
+    // מאפשר להעביר עיר ספציפית ב-URL, או ברירת מחדל ת"א
+    const city = req.query.city || 'תל אביב - מרכז';
+    console.log(`[SIMULATOR] Triggering fake alert for: ${city}`);
+
+    try {
+        const alertCities = [city];
+        const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', alertCities).get();
+        
+        snapshot.forEach(doc => {
+            const userId = doc.id;
+            const userRecord = doc.data();
+            
+            // איפוס הסטטוס למשתמשים בעיר
+            usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
+            
+            const userGroups = userRecord.groups || [];
+            userGroups.forEach(group => {
+                io.to(group).emit('group_member_status', { 
+                    userId: userId, 
+                    name: userRecord.name, 
+                    status: 'pending', 
+                    groupId: group 
+                });
+            });
+            
+            // שידור האזעקה לאפליקציות הפתוחות
+            io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
+        });
+
+        res.json({ success: true, message: `🚨 Simulated alert triggered successfully for ${city}` });
+    } catch (error) {
+        console.error("Error in simulator:", error);
+        res.status(500).json({ error: 'Failed to trigger simulation' });
+    }
+});
 
 app.post('/api/status', async (req, res) => {
     const { userId, status } = req.body;
