@@ -32,6 +32,8 @@ const regionsMap = {
     "גבעתיים": "דן"
 };
 
+const SECRET_WEBHOOK_TOKEN = 'omer_safezone_secret_2026';
+
 function deriveAlertAreas(cities) {
     if (!cities || !Array.isArray(cities)) return [];
     const areas = new Set(cities);
@@ -142,7 +144,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// --- נתיב חדש: שליפת נתוני משתמש לסנכרון PWA ---
 app.get('/api/user/:userId', async (req, res) => {
     try {
         const doc = await db.collection('users').doc(req.params.userId).get();
@@ -156,7 +157,6 @@ app.get('/api/user/:userId', async (req, res) => {
         res.status(500).json({ error: 'Database error' });
     }
 });
-// ------------------------------------------------
 
 app.post('/api/register-push', async (req, res) => {
     const { userId, token } = req.body;
@@ -222,66 +222,73 @@ app.post('/api/ping-group', async (req, res) => {
     }
 });
 
-const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
-const OREF_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    'Referer': 'https://www.oref.org.il/',
-    'X-Requested-With': 'XMLHttpRequest',
-    'Content-Type': 'application/json'
-};
+// --- חדש: הנתיב שמקבל את האזעקות מהמחשב שלך בישראל ---
+app.post('/api/webhook-alert', async (req, res) => {
+    const { secret, cities } = req.body;
+    
+    // מוודא שרק אתה יכול לשלוח לפה נתונים
+    if (secret !== SECRET_WEBHOOK_TOKEN) {
+        console.log("⚠️ Unauthorized webhook attempt!");
+        return res.status(403).json({ error: 'Unauthorized' });
+    }
 
-let lastAlertId = 0;
+    if (!cities || !Array.isArray(cities)) {
+        return res.status(400).json({ error: 'Invalid data' });
+    }
 
-async function pollOrefApi() {
+    console.log(`🚨 [WEBHOOK] אזעקה התקבלה מהמחשב בישראל! אזורים: ${cities.join(', ')}`);
+
     try {
-        const response = await axios.get(OREF_API_URL, { headers: OREF_HEADERS, timeout: 3000 });
-        const data = response.data;
+        const searchCities = cities.slice(0, 10);
+        const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', searchCities).get();
         
-        if (data && data.id && data.id !== lastAlertId) {
-            lastAlertId = data.id;
-            const alertCities = data.data; 
-            console.log(`🚨 אזעקה זוהתה! אזורים: ${alertCities.join(', ')}`);
+        snapshot.forEach(doc => {
+            const userId = doc.id;
+            const userRecord = doc.data();
             
-            const searchCities = alertCities.slice(0, 10);
-            const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', searchCities).get();
+            usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
-            snapshot.forEach(doc => {
-                const userId = doc.id;
-                const userRecord = doc.data();
-                
-                usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
-                
-                const userGroups = userRecord.groups || [];
-                userGroups.forEach(group => {
-                    io.to(group).emit('group_member_status', { 
-                        userId: userId, 
-                        name: userRecord.name, 
-                        status: 'pending', 
-                        groupId: group 
-                    });
+            const userGroups = userRecord.groups || [];
+            userGroups.forEach(group => {
+                io.to(group).emit('group_member_status', { 
+                    userId: userId, 
+                    name: userRecord.name, 
+                    status: 'pending', 
+                    groupId: group 
                 });
-                
-                io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
-
-                const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
-                if (userPushToken) {
-                    const message = {
-                        notification: {
-                            title: '🚨 אזעקה באזורך!',
-                            body: `התרעה הופעלה באזורים: ${alertCities.slice(0, 3).join(', ')}. היכנס מיד למרחב מוגן.`
-                        },
-                        token: userPushToken
-                    };
-                    admin.messaging().send(message).catch(err => console.error(err));
-                }
             });
-        }
-    } catch (error) {}
-}
+            
+            io.emit('new_alert_for_user', { userId: userId, cities: cities });
 
-setInterval(pollOrefApi, 1000);
+            const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
+            if (userPushToken) {
+                const message = {
+                    notification: {
+                        title: '🚨 אזעקה באזורך!',
+                        body: `התרעה הופעלה באזורים: ${cities.slice(0, 3).join(', ')}. היכנס מיד למרחב מוגן.`
+                    },
+                    token: userPushToken
+                };
+                admin.messaging().send(message).catch(err => console.error(err));
+            }
+        });
+
+        res.json({ success: true, message: 'Alert processed successfully' });
+    } catch (error) {
+        console.error("Error processing webhook alert:", error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// --------------------------------------------------------
 
 app.get('/api/test-oref', async (req, res) => {
+    const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
+    const OREF_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Referer': 'https://www.oref.org.il/',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/json'
+    };
     try {
         const response = await axios.get(OREF_API_URL, { headers: OREF_HEADERS, timeout: 5000 });
         res.json({ success: true, status: response.status, data: response.data, message: "✅ Connected to Oref API!" });
