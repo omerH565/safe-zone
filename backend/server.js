@@ -5,7 +5,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const admin = require('firebase-admin');
 
-// כאן בהמשך נכניס את קובץ המפתחות של Firebase
 // const serviceAccount = require('./firebase-adminsdk.json');
 // admin.initializeApp({
 //   credential: admin.credential.cert(serviceAccount)
@@ -23,21 +22,15 @@ const io = new Server(server, {
 const usersStatus = new Map();
 const userPushTokens = new Map();
 
-// מסד נתונים דינמי עם ערים וקבוצות
-const userGroupsDB = {
-    'emp_1': { name: 'אבא', groups: ['family_cohen', 'dev_team'], targetCities: ['תל אביב - יפו', 'רמת גן'] },
-    'emp_2': { name: 'אמא', groups: ['family_cohen'], targetCities: ['תל אביב - יפו'] },
-    'emp_3': { name: 'דני (מפתח)', groups: ['dev_team'], targetCities: ['חיפה'] }
-};
+// מסד נתונים דינמי - מתחיל ריק לחלוטין! (בשלב 2 נחליף את זה במסד נתונים אמיתי)
+const userGroupsDB = {};
 
-// --- חדש: פונקציה ששולחת למשתמש ספציפי את כל החברים בקבוצה שלו כדי למלא את המסך ---
 function sendGroupStateToSocket(socket, groupId) {
     for (const [uid, record] of Object.entries(userGroupsDB)) {
         if (record.groups.includes(groupId)) {
             const statusData = usersStatus.get(uid);
             const currentStatus = statusData ? statusData.status : 'pending';
             
-            // שליחה ישירות לסוקט שהרגע התחבר
             socket.emit('group_member_status', {
                 userId: uid,
                 name: record.name,
@@ -51,37 +44,43 @@ function sendGroupStateToSocket(socket, groupId) {
 io.on('connection', (socket) => {
     console.log('User connected to socket:', socket.id);
 
-    // הצטרפות רגילה
+    // התחברות של משתמש קיים עם מערך הקבוצות שלו
     socket.on('join_groups', (userData) => {
-        const { userId } = userData;
-        const userRecord = userGroupsDB[userId];
+        const { userId, name, groups } = userData;
         
-        if (userRecord && userRecord.groups) {
-            userRecord.groups.forEach(group => {
+        // יצירה או עדכון של המשתמש בזיכרון השרת
+        if (!userGroupsDB[userId]) {
+            userGroupsDB[userId] = { name: name, groups: [], targetCities: ['תל אביב - יפו'] };
+        }
+        userGroupsDB[userId].name = name;
+        
+        if (groups && Array.isArray(groups)) {
+            groups.forEach(group => {
+                if (!userGroupsDB[userId].groups.includes(group)) {
+                    userGroupsDB[userId].groups.push(group);
+                }
                 socket.join(group);
-                console.log(`User ${userRecord.name} joined group: ${group}`);
-                
-                // --- התיקון: ממלא את המסך של המשתמש ברגע שהוא מתחבר ---
+                console.log(`User ${name} joined group: ${group}`);
                 sendGroupStateToSocket(socket, group);
             });
         }
     });
 
-    // הצטרפות דינמית דרך לינק הזמנה
+    // הצטרפות לקבוצה חדשה (דרך לינק)
     socket.on('join_via_link', (data) => {
         const { userId, name, groupId, targetCities } = data;
         
-        // יצירת המשתמש החדש במסד הנתונים של השרת
-        userGroupsDB[userId] = {
-            name: name,
-            groups: [groupId],
-            targetCities: targetCities || ['תל אביב - יפו'] 
-        };
+        if (!userGroupsDB[userId]) {
+            userGroupsDB[userId] = { name: name, groups: [], targetCities: targetCities || ['תל אביב - יפו'] };
+        }
+        
+        if (!userGroupsDB[userId].groups.includes(groupId)) {
+            userGroupsDB[userId].groups.push(groupId);
+        }
         
         socket.join(groupId);
-        console.log(`New user ${name} (${userId}) dynamically joined group: ${groupId}`);
+        console.log(`User ${name} (${userId}) dynamically joined group: ${groupId}`);
         
-        // מודיע לשאר חברי הקבוצה (כמו אמא במסך הימני) שהצטרף חבר חדש
         io.to(groupId).emit('group_member_status', { 
             userId, 
             name: name, 
@@ -89,7 +88,6 @@ io.on('connection', (socket) => {
             groupId 
         });
 
-        // --- התיקון: שולח למשתמש החדש את כל מי שכבר בקבוצה (כדי שהמסך השמאלי לא יהיה ריק) ---
         sendGroupStateToSocket(socket, groupId);
     });
 });
@@ -115,7 +113,6 @@ const OREF_HEADERS = {
 
 let lastAlertId = 0;
 
-// לוגיקת סינון לפי עיר
 async function pollOrefApi() {
     try {
         const response = await axios.get(OREF_API_URL, { headers: OREF_HEADERS });

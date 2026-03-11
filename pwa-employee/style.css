@@ -5,6 +5,23 @@ body {
 }
 .container { width: 90%; max-width: 400px; padding: 20px 0; }
 .hidden { display: none !important; }
+
+/* עיצוב למסך Onboarding */
+.modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(17, 24, 39, 0.95);
+    display: flex; justify-content: center; align-items: center; z-index: 1000;
+}
+.modal-content {
+    background-color: #1f2937; padding: 30px; border-radius: 12px; width: 85%; max-width: 350px; text-align: right;
+}
+.instructions { background-color: #374151; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; }
+.instructions ol { margin-top: 5px; padding-right: 20px; }
+.input-field {
+    width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #4b5563;
+    background-color: #111827; color: white; font-size: 1rem; box-sizing: border-box;
+}
+
 #alert-banner {
     background-color: #ef4444; padding: 20px; border-radius: 12px;
     margin-bottom: 30px; animation: pulse 1.5s infinite;
@@ -20,11 +37,10 @@ body {
 .btn-red { background-color: #dc2626; color: white; border: 2px solid white;}
 #status-message { margin-top: 30px; padding: 20px; border-radius: 12px; background-color: #1f2937; }
 .group-card { background-color: #1f2937; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-.group-title { margin-top: 0; font-size: 1.1rem; color: #9ca3af; border-bottom: 1px solid #374151; padding-bottom: 5px; }
 .member-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #374151; }
 .member-item:last-child { border-bottom: none; }
 .status-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
-.status-dot.pending { background-color: #4b5563; } /* אפור - טרם דיווח */
-.status-dot.protected { background-color: #22c55e; } /* ירוק */
-.status-dot.on_the_way { background-color: #eab308; } /* צהוב */
-.status-dot.needs_help { background-color: #ef4444; } /* אדום */
+.status-dot.pending { background-color: #4b5563; }
+.status-dot.protected { background-color: #22c55e; }
+.status-dot.on_the_way { background-color: #eab308; }
+.status-dot.needs_help { background-color: #ef4444; }
