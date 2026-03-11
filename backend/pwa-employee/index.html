@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeZone</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <select id="user-selector" style="margin-bottom: 20px; padding: 10px; width: 100%; border-radius: 8px;">
+            <option value="emp_1">התחבר כאבא (משפחה + עבודה)</option>
+            <option value="emp_2">התחבר כאמא (משפחה בלבד)</option>
+            <option value="emp_3">התחבר כדני (עבודה בלבד)</option>
+        </select>
+
+        <div id="alert-banner" class="hidden">
+            <h1>🚨 אזעקה באזורך!</h1>
+            <p id="timer">זמן להתגוננות: 90 שניות</p>
+        </div>
+
+        <div class="action-buttons">
+            <button id="btn-safe" class="btn btn-green">אני מוגן</button>
+            <button id="btn-on-way" class="btn btn-yellow">בדרך למרחב מוגן</button>
+            <button id="btn-help" class="btn btn-red">לא מוגן / צריך עזרה</button>
+        </div>
+
+        <div id="status-message" class="hidden">
+            <h2 id="final-status-text"></h2>
+            <p>שמור על עצמך והישאר במרחב המוגן 10 דקות.</p>
+            
+            <button id="btn-arrived" class="btn btn-green hidden" style="margin-top: 20px;">✅ הגעתי למרחב מוגן!</button>
+        </div>
+
+        <div id="groups-container" style="margin-top: 30px; text-align: right;">
+            <h3>הקבוצות שלי:</h3>
+            <div id="groups-list"></div>
+            
+            <button id="copy-link-btn" style="margin-top: 15px; width: 100%; padding: 12px; background: #374151; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
+                🔗 העתק קישור הזמנה לקבוצה
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
