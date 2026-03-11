@@ -1,25 +1,22 @@
-const SERVER_URL = 'https://safezone-api-uozd.onrender.com'; // הכתובת שלך ב-Render
+const SERVER_URL = 'https://safezone-api-uozd.onrender.com';
 const socket = io(SERVER_URL);
 
-// משתני משתמש גלובליים
 let currentUserId = localStorage.getItem('safeZone_userId');
 let currentUserName = localStorage.getItem('safeZone_userName');
 let userGroups = JSON.parse(localStorage.getItem('safeZone_groups') || '[]');
+let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '["תל אביב - מרכז"]');
 
-// אלמנטים ב-DOM
 const onboardingModal = document.getElementById('onboarding-modal');
 const mainApp = document.getElementById('main-app');
 const greetingTitle = document.getElementById('greeting-title');
 const groupsList = document.getElementById('groups-list');
 const noGroupsMsg = document.getElementById('no-groups-msg');
 
-// לוגיקת Onboarding וכניסה
 function initApp() {
     const urlParams = new URLSearchParams(window.location.search);
     const joinGroupId = urlParams.get('join');
 
     if (!currentUserId || !currentUserName) {
-        // משתמש חדש לגמרי
         mainApp.classList.add('hidden');
         onboardingModal.classList.remove('hidden');
 
@@ -30,12 +27,21 @@ function initApp() {
                 return;
             }
             
+            // שליפת כל הערים שסומנו
+            const selectedCities = Array.from(document.querySelectorAll('#city-selector input:checked')).map(cb => cb.value);
+            if (selectedCities.length === 0) {
+                alert('אנא בחר לפחות אזור התרעה אחד');
+                return;
+            }
+            
             currentUserId = 'user_' + Math.random().toString(36).substr(2, 9);
             currentUserName = nameInput;
+            userCities = selectedCities;
             
             localStorage.setItem('safeZone_userId', currentUserId);
             localStorage.setItem('safeZone_userName', currentUserName);
             localStorage.setItem('safeZone_groups', JSON.stringify(userGroups));
+            localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
 
             onboardingModal.classList.add('hidden');
             mainApp.classList.remove('hidden');
@@ -45,10 +51,8 @@ function initApp() {
             }
             
             connectToServer();
-            renderUI();
         });
     } else {
-        // משתמש קיים
         mainApp.classList.remove('hidden');
         onboardingModal.classList.add('hidden');
         
@@ -57,7 +61,6 @@ function initApp() {
         }
         
         connectToServer();
-        renderUI();
     }
 }
 
@@ -70,11 +73,10 @@ function handleJoinGroup(groupId) {
             userId: currentUserId,
             name: currentUserName,
             groupId: groupId,
-            targetCities: ['תל אביב - יפו']
+            targetCities: userCities
         });
         alert(`הצטרפת בהצלחה לקבוצה: ${groupId}`);
     }
-    // ניקוי שורת הכתובת
     window.history.replaceState({}, document.title, window.location.pathname);
 }
 
@@ -83,11 +85,11 @@ function connectToServer() {
     socket.emit('join_groups', { 
         userId: currentUserId, 
         name: currentUserName,
-        groups: userGroups 
+        groups: userGroups,
+        targetCities: userCities
     });
 }
 
-// עדכון רשימת הקבוצות במסך
 socket.on('group_member_status', (data) => {
     const { userId, name, status, groupId } = data;
     
@@ -119,7 +121,6 @@ socket.on('group_member_status', (data) => {
     }
 
     const statusClass = status === 'pending' ? 'pending' : status;
-    // כשאנחנו מציירים את עצמנו, נוסיף (אני)
     const displayName = userId === currentUserId ? `${name} (אני)` : name;
 
     memberDiv.innerHTML = `
@@ -128,7 +129,6 @@ socket.on('group_member_status', (data) => {
     `;
 });
 
-// יצירת קבוצה חדשה ידנית
 document.getElementById('btn-create-group').addEventListener('click', () => {
     const newGroupName = prompt('הכנס שם לקבוצה החדשה (באנגלית, ללא רווחים, למשל: my_family):');
     if (newGroupName && newGroupName.trim() !== '') {
@@ -144,7 +144,6 @@ window.copyInviteLink = function(groupId) {
     });
 };
 
-// לוגיקת אזעקות וסטטוס
 socket.on('new_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
         document.getElementById('alert-banner').classList.remove('hidden');
@@ -218,5 +217,4 @@ function startTimer(seconds) {
     }, 1000);
 }
 
-// הדלקת האפליקציה בטעינה
 initApp();

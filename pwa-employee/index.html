@@ -15,14 +15,24 @@
             <div class="instructions">
                 <p><strong>איך זה עובד?</strong></p>
                 <ol>
-                    <li>הכניסו את שמכם.</li>
+                    <li>הכניסו את שמכם ובחרו אזורי התרעה.</li>
                     <li>הצטרפו לקבוצות דרך קישור (משפחה, עבודה וכו').</li>
                     <li>באזעקה, לחצו על כפתור הסטטוס לעדכן את כולם.</li>
-                    <li><strong>מומלץ:</strong> הוסיפו את האתר למסך הבית! (בתפריט הדפדפן בחרו "הוסף למסך הבית").</li>
                 </ol>
             </div>
 
             <input type="text" id="setup-username" placeholder="הכנס את שמך כאן..." class="input-field">
+            
+            <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">בחר אזורי התרעה (ניתן לבחור כמה):</p>
+            <div id="city-selector" style="text-align: right; display: flex; flex-direction: column; gap: 8px; background: #111827; padding: 10px; border-radius: 8px; border: 1px solid #4b5563; max-height: 120px; overflow-y: auto;">
+                <label><input type="checkbox" value="תל אביב - מרכז" checked> תל אביב - מרכז</label>
+                <label><input type="checkbox" value="תל אביב - מזרח"> תל אביב - מזרח</label>
+                <label><input type="checkbox" value="תל אביב - דרום"> תל אביב - דרום</label>
+                <label><input type="checkbox" value="תל אביב - עבר הירקון"> תל אביב - עבר הירקון</label>
+                <label><input type="checkbox" value="רמת גן"> רמת גן</label>
+                <label><input type="checkbox" value="גבעתיים"> גבעתיים</label>
+            </div>
+
             <button id="btn-start" class="btn btn-green" style="margin-top: 15px;">התחל להשתמש</button>
         </div>
     </div>

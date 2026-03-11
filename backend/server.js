@@ -5,7 +5,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const admin = require('firebase-admin');
 
-// חיבור למסד הנתונים של פיירבייס!
 const serviceAccount = require('./firebase-adminsdk.json');
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -21,16 +20,34 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-// זיכרון זמני רק לסטטוס החירום (כדי לחסוך קריאות כתיבה לדאטה-בייס בזמן אזעקה)
 const usersStatus = new Map();
 const userPushTokens = new Map();
 
-// פונקציה לשליפת חברי הקבוצה מה-DB
+// מילון שמתרגם פוליגונים נקודתיים למרחב הכללי שלהם
+const regionsMap = {
+    "תל אביב - מרכז": "דן",
+    "תל אביב - מזרח": "דן",
+    "תל אביב - דרום": "דן",
+    "תל אביב - עבר הירקון": "דן",
+    "רמת גן": "דן",
+    "גבעתיים": "דן"
+};
+
+// פונקציה שמוסיפה את המרחב הרחב (למשל "דן") אוטומטית לרשימת המעקב של המשתמש
+function deriveAlertAreas(cities) {
+    if (!cities || !Array.isArray(cities)) return [];
+    const areas = new Set(cities);
+    cities.forEach(city => {
+        if (regionsMap[city]) {
+            areas.add(regionsMap[city]);
+        }
+    });
+    return Array.from(areas);
+}
+
 async function sendGroupStateToSocket(socket, groupId) {
     try {
-        // שולף מ-Firestore את כל המשתמשים שהקבוצה הזו נמצאת במערך הקבוצות שלהם
         const snapshot = await db.collection('users').where('groups', 'array-contains', groupId).get();
-        
         snapshot.forEach(doc => {
             const uid = doc.id;
             const record = doc.data();
@@ -52,23 +69,20 @@ async function sendGroupStateToSocket(socket, groupId) {
 io.on('connection', (socket) => {
     console.log('User connected to socket:', socket.id);
 
-    // התחברות של משתמש קיים
     socket.on('join_groups', async (userData) => {
-        const { userId, name, groups } = userData;
+        const { userId, name, groups, targetCities } = userData;
         try {
             const userRef = db.collection('users').doc(userId);
             const doc = await userRef.get();
-            let targetCities = ['תל אביב - יפו'];
+            const finalCities = deriveAlertAreas(targetCities || ['תל אביב - מרכז']);
 
             if (doc.exists) {
                 const data = doc.data();
-                targetCities = data.targetCities || targetCities;
-                // מיזוג קבוצות חדשות וישנות
                 const existingGroups = data.groups || [];
                 const mergedGroups = [...new Set([...existingGroups, ...(groups || [])])];
-                await userRef.update({ name, groups: mergedGroups });
+                await userRef.update({ name, groups: mergedGroups, targetCities: finalCities });
             } else {
-                await userRef.set({ name, groups: groups || [], targetCities });
+                await userRef.set({ name, groups: groups || [], targetCities: finalCities });
             }
 
             if (groups && Array.isArray(groups)) {
@@ -81,13 +95,12 @@ io.on('connection', (socket) => {
         } catch (err) { console.error("Error in join_groups:", err); }
     });
 
-    // הצטרפות לקבוצה חדשה (דרך לינק)
     socket.on('join_via_link', async (data) => {
         const { userId, name, groupId, targetCities } = data;
         try {
             const userRef = db.collection('users').doc(userId);
             const doc = await userRef.get();
-            let finalCities = targetCities || ['תל אביב - יפו'];
+            const finalCities = deriveAlertAreas(targetCities || ['תל אביב - מרכז']);
 
             if (doc.exists) {
                 const existingData = doc.data();
@@ -95,7 +108,7 @@ io.on('connection', (socket) => {
                 if (!existingGroups.includes(groupId)) {
                     existingGroups.push(groupId);
                 }
-                await userRef.update({ name, groups: existingGroups });
+                await userRef.update({ name, groups: existingGroups, targetCities: finalCities });
             } else {
                 await userRef.set({ name, groups: [groupId], targetCities: finalCities });
             }
@@ -146,10 +159,7 @@ async function pollOrefApi() {
             const alertCities = data.data; 
             console.log(`🚨 אזעקה זוהתה! אזורים: ${alertCities.join(', ')}`);
             
-            // מבצעים חיתוך (לוקחים עד 10 אזורים בגלל מגבלה של פיירבייס בשאילתה)
             const searchCities = alertCities.slice(0, 10);
-            
-            // שאילתה ישירה ל-DB: תביא רק משתמשים שהאזעקה רלוונטית לעיר שלהם!
             const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', searchCities).get();
             
             snapshot.forEach(doc => {
@@ -168,14 +178,12 @@ async function pollOrefApi() {
                         token: userPushToken,
                         webpush: { fcmOptions: { link: '/' } }
                     };
-                    
-                    // admin.messaging().send(message).catch(err => console.log(err));
                     console.log(`[Simulation] PUSH notification targeted for user ${userRecord.name}.`);
                 }
             });
         }
     } catch (error) {
-        // התעלמות משגיאות רשת שוטפות של פיקוד העורף
+        // התעלמות משגיאות רשת
     }
 }
 
@@ -189,16 +197,13 @@ app.post('/api/status', async (req, res) => {
     }
 
     try {
-        // שליפת פרטי המשתמש מה-DB
         const doc = await db.collection('users').doc(userId).get();
         const userName = doc.exists ? doc.data().name : 'משתמש לא ידוע';
         const userGroups = doc.exists ? (doc.data().groups || []) : [];
 
         usersStatus.set(userId, { name: userName, status, time: new Date() });
-        
         io.emit('status_update', { userId, name: userName, status });
 
-        // עדכון כל הקבוצות שהמשתמש חבר בהן
         userGroups.forEach(group => {
             io.to(group).emit('group_member_status', { 
                 userId, 
