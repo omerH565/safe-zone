@@ -25,6 +25,22 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <datalist id="israel-cities-list">
+        <option value="תל אביב - מרכז"></option>
+        <option value="תל אביב - מזרח"></option>
+        <option value="תל אביב - דרום"></option>
+        <option value="תל אביב - עבר הירקון"></option>
+        <option value="רמת גן"></option>
+        <option value="גבעתיים"></option>
+        <option value="רינתיה"></option>
+        <option value="פתח תקווה"></option>
+        <option value="ראשון לציון"></option>
+        <option value="חולון"></option>
+        <option value="ירושלים"></option>
+        <option value="חיפה"></option>
+        <option value="באר שבע"></option>
+    </datalist>
+
     <div id="onboarding-modal" class="modal hidden">
         <div class="modal-content">
             <h2>ברוכים הבאים ל-SafeZone 🛡️</h2>
@@ -42,13 +58,14 @@
 
             <div class="install-banner">
                 <div class="install-banner-content">
-                    לקבלת עדכונים בזמן אמת, לחצו על כפתור השיתוף
-                    <svg class="mini-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" fill="#1d4ed8"><path d="M12 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM4 1h8a1 1 0 0 1 1 1v1h-1v10h1v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"></path><path d="M10 2H6a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1z"></path><path d="M8 8V4.5a.5.5 0 0 1 1 0V8h1.5a.5.5 0 0 1 0 1H9v1.5a.5.5 0 0 1-1 0V9H6.5a.5.5 0 0 1 0-1H8z"></path></svg>
+                    לקבלת עדכונים בזמן אמת, לחצו על השיתוף
+                    <svg class="mini-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="white"><path d="M12 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM4 1h8a1 1 0 0 1 1 1v1h-1v10h1v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"></path><path d="M10 2H6a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1z"></path><path d="M8 8V4.5a.5.5 0 0 1 1 0V8h1.5a.5.5 0 0 1 0 1H9v1.5a.5.5 0 0 1-1 0V9H6.5a.5.5 0 0 1 0-1H8z"></path></svg>
                     ואז 'הוספה למסך הבית'
-                    <svg class="mini-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" fill="#1d4ed8"><path d="M8 0h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2zM4 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"></path><path d="M8 12.5a.5.5 0 0 1 1 0V4a.5.5 0 0 1 1 0v8.5a1.5 1.5 0 1 0 0-3h-1.5z"></path></svg>
+                    <svg class="mini-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="white"><path d="M8 0h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2zM4 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"></path><path d="M8 12.5a.5.5 0 0 1 1 0V4a.5.5 0 0 1 1 0v8.5a1.5 1.5 0 1 0 0-3h-1.5z"></path></svg>
                     .
                 </div>
             </div>
+
             <div id="auth-section" style="display: flex; flex-direction: column; gap: 10px; margin-top: 20px;">
                 <button id="btn-google-login" class="btn" style="background-color: #ffffff; color: #111827; display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0;">
                     <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google Logo" style="width: 20px;">
@@ -63,16 +80,14 @@
             </div>
             
             <div id="setup-section" class="hidden">
-                <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">בחר אזורי התרעה (ניתן לבחור כמה):</p>
-                <div id="city-selector" style="text-align: right; display: flex; flex-direction: column; gap: 8px; background: #111827; padding: 10px; border-radius: 8px; border: 1px solid #4b5563; max-height: 120px; overflow-y: auto;">
-                    <label><input type="checkbox" value="תל אביב - מרכז" checked> תל אביב - מרכז</label>
-                    <label><input type="checkbox" value="תל אביב - מזרח"> תל אביב - מזרח</label>
-                    <label><input type="checkbox" value="תל אביב - דרום"> תל אביב - דרום</label>
-                    <label><input type="checkbox" value="תל אביב - עבר הירקון"> תל אביב - עבר הירקון</label>
-                    <label><input type="checkbox" value="רמת גן"> רמת גן</label>
-                    <label><input type="checkbox" value="גבעתיים"> גבעתיים</label>
+                <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">בחר אזורי התרעה:</p>
+                <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                    <input type="text" id="onboarding-city-input" list="israel-cities-list" placeholder="הקלד עיר או יישוב..." class="input-field" style="margin-bottom: 0;">
+                    <button id="btn-add-onboarding-city" class="btn btn-blue" style="width: auto; margin: 0; padding: 0 15px;">הוסף</button>
                 </div>
-                <button id="btn-start" class="btn btn-green" style="margin-top: 15px;">סיום וכניסה</button>
+                <div id="onboarding-city-tags" class="city-tags-container"></div>
+                
+                <button id="btn-start" class="btn btn-green" style="margin-top: 20px;">סיום וכניסה</button>
             </div>
         </div>
     </div>
@@ -83,16 +98,13 @@
             <p id="settings-username-display" style="color: #9ca3af; margin-bottom: 15px;"></p>
             
             <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">עדכן אזורי התרעה:</p>
-            <div id="settings-city-selector" style="text-align: right; display: flex; flex-direction: column; gap: 8px; background: #111827; padding: 10px; border-radius: 8px; border: 1px solid #4b5563; max-height: 120px; overflow-y: auto;">
-                <label><input type="checkbox" value="תל אביב - מרכז"> תל אביב - מרכז</label>
-                <label><input type="checkbox" value="תל אביב - מזרח"> תל אביב - מזרח</label>
-                <label><input type="checkbox" value="תל אביב - דרום"> תל אביב - דרום</label>
-                <label><input type="checkbox" value="תל אביב - עבר הירקון"> תל אביב - עבר הירקון</label>
-                <label><input type="checkbox" value="רמת גן"> רמת גן</label>
-                <label><input type="checkbox" value="גבעתיים"> גבעתיים</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                <input type="text" id="settings-city-input" list="israel-cities-list" placeholder="הקלד עיר או יישוב..." class="input-field" style="margin-bottom: 0;">
+                <button id="btn-add-settings-city" class="btn btn-blue" style="width: auto; margin: 0; padding: 0 15px;">הוסף</button>
             </div>
+            <div id="settings-city-tags" class="city-tags-container"></div>
 
-            <button id="btn-save-settings" class="btn btn-green" style="margin-top: 15px;">שמור שינויים</button>
+            <button id="btn-save-settings" class="btn btn-green" style="margin-top: 20px;">שמור שינויים</button>
             <button id="btn-logout" class="btn btn-red" style="margin-top: 10px;">התנתק (Logout)</button>
             <button id="btn-close-settings" class="btn" style="background: #374151; border: 1px solid #4b5563; margin-top: 10px;">ביטול</button>
         </div>
@@ -150,4 +162,4 @@
     <script src="app.js"></script>
 </body>
 </html>
-
+https://links.payboxapp.com/FDIJ7wgmq1b
