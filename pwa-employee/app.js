@@ -1,6 +1,14 @@
 const SERVER_URL = 'https://safezone-api-uozd.onrender.com';
 const socket = io(SERVER_URL);
 
+// תיקון קריטי ל-iOS: התחברות מחדש לחדרי הקבוצות אחרי שהאפליקציה חוזרת מהרקע
+socket.on('connect', () => {
+    console.log("🟢 Socket connected/reconnected!");
+    if (currentUserId && currentUserName) {
+        connectToServer(); // שולח מחדש את רשימת הקבוצות לשרת כדי שיצרף אותנו לחדרים
+    }
+});
+
 const firebaseConfig = {
     apiKey: "AIzaSyCQmRJgQ9NbWS2CJIaBxvaAkYUFqgOOXwg",
     authDomain: "safezone-3c456.firebaseapp.com",
