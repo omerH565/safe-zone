@@ -19,6 +19,7 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1164/1164323.png">
     
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-messaging-compat.js"></script>
     
     <link rel="stylesheet" href="style.css">
@@ -32,34 +33,45 @@
             <div class="instructions">
                 <p><strong>איך זה עובד?</strong></p>
                 <ol>
-                    <li>הכניסו את שמכם ובחרו אזורי התרעה.</li>
-                    <li>הצטרפו לקבוצות דרך קישור.</li>
-                    <li><strong>אשרו את קבלת ההתראות (Push) כשהדפדפן יבקש!</strong></li>
+                    <li>התחברו לחשבון שלכם.</li>
+                    <li>בחרו את אזורי ההתרעה שלכם.</li>
+                    <li>הצטרפו לקבוצות דרך קישורים.</li>
                     <li>באזעקה, לחצו על כפתור הסטטוס לעדכן את כולם.</li>
                 </ol>
             </div>
 
-            <input type="text" id="setup-username" placeholder="הכנס את שמך כאן..." class="input-field">
-            
-            <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">בחר אזורי התרעה (ניתן לבחור כמה):</p>
-            <div id="city-selector" style="text-align: right; display: flex; flex-direction: column; gap: 8px; background: #111827; padding: 10px; border-radius: 8px; border: 1px solid #4b5563; max-height: 120px; overflow-y: auto;">
-                <label><input type="checkbox" value="תל אביב - מרכז" checked> תל אביב - מרכז</label>
-                <label><input type="checkbox" value="תל אביב - מזרח"> תל אביב - מזרח</label>
-                <label><input type="checkbox" value="תל אביב - דרום"> תל אביב - דרום</label>
-                <label><input type="checkbox" value="תל אביב - עבר הירקון"> תל אביב - עבר הירקון</label>
-                <label><input type="checkbox" value="רמת גן"> רמת גן</label>
-                <label><input type="checkbox" value="גבעתיים"> גבעתיים</label>
+            <div id="auth-section" style="display: flex; flex-direction: column; gap: 10px;">
+                <button id="btn-google-login" class="btn" style="background-color: #ffffff; color: #111827; display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0;">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google Logo" style="width: 20px;">
+                    התחבר עם Google
+                </button>
+                <button id="btn-facebook-login" class="btn" style="background-color: #1877F2; color: white; display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951"/>
+                    </svg>
+                    התחבר עם פייסבוק
+                </button>
             </div>
-
-            <button id="btn-start" class="btn btn-green" style="margin-top: 15px;">התחל להשתמש</button>
+            
+            <div id="setup-section" class="hidden">
+                <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">בחר אזורי התרעה (ניתן לבחור כמה):</p>
+                <div id="city-selector" style="text-align: right; display: flex; flex-direction: column; gap: 8px; background: #111827; padding: 10px; border-radius: 8px; border: 1px solid #4b5563; max-height: 120px; overflow-y: auto;">
+                    <label><input type="checkbox" value="תל אביב - מרכז" checked> תל אביב - מרכז</label>
+                    <label><input type="checkbox" value="תל אביב - מזרח"> תל אביב - מזרח</label>
+                    <label><input type="checkbox" value="תל אביב - דרום"> תל אביב - דרום</label>
+                    <label><input type="checkbox" value="תל אביב - עבר הירקון"> תל אביב - עבר הירקון</label>
+                    <label><input type="checkbox" value="רמת גן"> רמת גן</label>
+                    <label><input type="checkbox" value="גבעתיים"> גבעתיים</label>
+                </div>
+                <button id="btn-start" class="btn btn-green" style="margin-top: 15px;">סיום וכניסה</button>
+            </div>
         </div>
     </div>
 
     <div id="settings-modal" class="modal hidden">
         <div class="modal-content">
             <h2>הגדרות ⚙️</h2>
-            
-            <input type="text" id="settings-username" placeholder="הכנס את שמך כאן..." class="input-field">
+            <p id="settings-username-display" style="color: #9ca3af; margin-bottom: 15px;"></p>
             
             <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">עדכן אזורי התרעה:</p>
             <div id="settings-city-selector" style="text-align: right; display: flex; flex-direction: column; gap: 8px; background: #111827; padding: 10px; border-radius: 8px; border: 1px solid #4b5563; max-height: 120px; overflow-y: auto;">
@@ -72,12 +84,12 @@
             </div>
 
             <button id="btn-save-settings" class="btn btn-green" style="margin-top: 15px;">שמור שינויים</button>
+            <button id="btn-logout" class="btn btn-red" style="margin-top: 10px;">התנתק (Logout)</button>
             <button id="btn-close-settings" class="btn" style="background: #374151; border: 1px solid #4b5563; margin-top: 10px;">ביטול</button>
         </div>
     </div>
 
     <div class="container" id="main-app" class="hidden">
-        
         <button id="btn-settings" style="position: absolute; top: 20px; left: 20px; background: none; border: none; font-size: 1.5rem; cursor: pointer;">⚙️</button>
 
         <h2 id="greeting-title" style="text-align: right; margin-bottom: 20px;"></h2>
@@ -113,6 +125,15 @@
             <div id="groups-list">
                 <p id="no-groups-msg" style="color: #9ca3af; text-align: center; font-style: italic;">טרם הצטרפת לקבוצות. בקש קישור הזמנה או צור קבוצה חדשה.</p>
             </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #374151;">
+            <p style="color: #9ca3af; font-size: 0.85rem; margin-bottom: 12px;">
+                SafeZone מפותחת ומופעלת באהבה. <br>המערכת עוזרת לכם? עזרו לי לממן את השרתים 🚀
+            </p>
+            <a href="https://payboxapp.page.link/YOUR_PAYBOX_LINK" target="_blank" style="background-color: #2563eb; color: white; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 0.9rem; display: inline-block; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                ☕ תמכו בפרויקט (PayBox)
+            </a>
         </div>
     </div>
 

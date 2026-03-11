@@ -10,15 +10,18 @@ const firebaseConfig = {
     appId: "1:497720147146:web:47ebabd14ec8b3c4110833"
 };
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const messaging = firebase.messaging();
 
-let currentUserId = localStorage.getItem('safeZone_userId');
-let currentUserName = localStorage.getItem('safeZone_userName');
+let currentUserId = null;
+let currentUserName = null;
 let userGroups = JSON.parse(localStorage.getItem('safeZone_groups') || '[]');
-let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '["תל אביב - מרכז"]');
+let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '[]');
 let currentTimer; 
 
 const onboardingModal = document.getElementById('onboarding-modal');
+const authSection = document.getElementById('auth-section');
+const setupSection = document.getElementById('setup-section');
 const settingsModal = document.getElementById('settings-modal');
 const mainApp = document.getElementById('main-app');
 const greetingTitle = document.getElementById('greeting-title');
@@ -29,58 +32,74 @@ function initApp() {
     const urlParams = new URLSearchParams(window.location.search);
     const joinGroupId = urlParams.get('join');
 
-    if (!currentUserId || !currentUserName) {
-        mainApp.classList.add('hidden');
-        onboardingModal.classList.remove('hidden');
-
-        document.getElementById('btn-start').addEventListener('click', () => {
-            const nameInput = document.getElementById('setup-username').value.trim();
-            if (nameInput === '') {
-                alert('אנא הכנס שם כדי להמשיך');
-                return;
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            currentUserId = user.uid;
+            currentUserName = user.displayName || "משתמש";
+            
+            if (userCities.length === 0) {
+                onboardingModal.classList.remove('hidden');
+                authSection.classList.add('hidden');
+                setupSection.classList.remove('hidden');
+            } else {
+                onboardingModal.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                if (joinGroupId) handleJoinGroup(joinGroupId);
+                connectToServer();
+                requestPushPermission();
             }
-            
-            const selectedCities = Array.from(document.querySelectorAll('#city-selector input:checked')).map(cb => cb.value);
-            if (selectedCities.length === 0) {
-                alert('אנא בחר לפחות אזור התרעה אחד');
-                return;
-            }
-            
-            currentUserId = 'user_' + Math.random().toString(36).substr(2, 9);
-            currentUserName = nameInput;
-            userCities = selectedCities;
-            
-            localStorage.setItem('safeZone_userId', currentUserId);
-            localStorage.setItem('safeZone_userName', currentUserName);
-            localStorage.setItem('safeZone_groups', JSON.stringify(userGroups));
-            localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
-
-            onboardingModal.classList.add('hidden');
-            mainApp.classList.remove('hidden');
-            
-            if (joinGroupId) {
-                handleJoinGroup(joinGroupId);
-            }
-            
-            connectToServer();
-            requestPushPermission();
-        });
-    } else {
-        mainApp.classList.remove('hidden');
-        onboardingModal.classList.add('hidden');
-        
-        if (joinGroupId) {
-            handleJoinGroup(joinGroupId);
+        } else {
+            mainApp.classList.add('hidden');
+            onboardingModal.classList.remove('hidden');
+            authSection.classList.remove('hidden');
+            setupSection.classList.add('hidden');
         }
+    });
+
+    // התחברות עם גוגל
+    document.getElementById('btn-google-login').addEventListener('click', () => {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        auth.signInWithPopup(provider).catch(error => {
+            console.error("Google Login failed:", error);
+            alert("שגיאה בהתחברות גוגל. נסה שוב.");
+        });
+    });
+
+    // --- חדש: התחברות עם פייסבוק ---
+    document.getElementById('btn-facebook-login').addEventListener('click', () => {
+        const provider = new firebase.auth.FacebookAuthProvider();
+        auth.signInWithPopup(provider).catch(error => {
+            console.error("Facebook Login failed:", error);
+            // אם לפייסבוק וגוגל יש את אותו מייל - פיירבייס עלול לזרוק שגיאה שדורשת לקשר את החשבונות
+            if (error.code === 'auth/account-exists-with-different-credential') {
+                alert("המייל הזה כבר מחובר דרך גוגל! אנא התחבר דרך גוגל.");
+            } else {
+                alert("שגיאה בהתחברות פייסבוק. נסה שוב.");
+            }
+        });
+    });
+    // ---------------------------------
+
+    document.getElementById('btn-start').addEventListener('click', () => {
+        const selectedCities = Array.from(document.querySelectorAll('#city-selector input:checked')).map(cb => cb.value);
+        if (selectedCities.length === 0) {
+            alert('אנא בחר לפחות אזור התרעה אחד');
+            return;
+        }
+        userCities = selectedCities;
+        localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
+
+        onboardingModal.classList.add('hidden');
+        mainApp.classList.remove('hidden');
         
+        if (joinGroupId) handleJoinGroup(joinGroupId);
         connectToServer();
         requestPushPermission();
-    }
+    });
 }
 
-// --- ניהול הגדרות ---
 document.getElementById('btn-settings').addEventListener('click', () => {
-    document.getElementById('settings-username').value = currentUserName;
+    document.getElementById('settings-username-display').innerText = `מחובר כ: ${currentUserName}`;
     const checkboxes = document.querySelectorAll('#settings-city-selector input');
     checkboxes.forEach(cb => {
         cb.checked = userCities.includes(cb.value);
@@ -92,18 +111,19 @@ document.getElementById('btn-close-settings').addEventListener('click', () => {
     settingsModal.classList.add('hidden');
 });
 
+document.getElementById('btn-logout').addEventListener('click', () => {
+    auth.signOut().then(() => {
+        window.location.reload();
+    });
+});
+
 document.getElementById('btn-save-settings').addEventListener('click', () => {
-    const newName = document.getElementById('settings-username').value.trim();
     const newCities = Array.from(document.querySelectorAll('#settings-city-selector input:checked')).map(cb => cb.value);
-    
-    if (newName === '' || newCities.length === 0) {
-        alert('חובה למלא שם ולבחור לפחות עיר אחת');
+    if (newCities.length === 0) {
+        alert('חובה לבחור לפחות עיר אחת');
         return;
     }
-
-    currentUserName = newName;
     userCities = newCities;
-    localStorage.setItem('safeZone_userName', currentUserName);
     localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
     
     socket.emit('update_settings', {
@@ -113,9 +133,7 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
     });
 
     settingsModal.classList.add('hidden');
-    greetingTitle.innerText = `שלום, ${currentUserName}`;
 });
-// --------------------
 
 async function requestPushPermission() {
     try {
@@ -123,7 +141,6 @@ async function requestPushPermission() {
         if (permission === 'granted') {
             const token = await messaging.getToken({ vapidKey: "BJnoSnDhaKPdrWuM74yrJ9EKGhORjs_n_tWOU_2AvPAXim29RHYJilycEChrjtbpp7boSvIn8PwCj37vjYd9s4M" });
             if (token) {
-                console.log("Push token received");
                 await fetch(`${SERVER_URL}/api/register-push`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -131,9 +148,7 @@ async function requestPushPermission() {
                 });
             }
         }
-    } catch (error) {
-        console.error("Error getting push token:", error);
-    }
+    } catch (error) { console.error("Error getting push token:", error); }
 }
 
 messaging.onMessage((payload) => {
@@ -168,7 +183,6 @@ function connectToServer() {
 
 socket.on('group_member_status', (data) => {
     const { userId, name, status, groupId } = data;
-    
     if (noGroupsMsg) noGroupsMsg.style.display = 'none';
 
     let groupDiv = document.getElementById(`group-${groupId}`);
@@ -176,7 +190,6 @@ socket.on('group_member_status', (data) => {
         groupDiv = document.createElement('div');
         groupDiv.id = `group-${groupId}`;
         groupDiv.className = 'group-card';
-        // הוספתי כאן את כפתור "בדיקת הנוכחות" (פינג)
         groupDiv.innerHTML = `
             <div class="group-header" style="display: flex; justify-content: space-between; border-bottom: 1px solid #374151; padding-bottom: 5px; margin-bottom: 10px;">
                 <h4 style="margin: 0; color: #9ca3af;">${groupId}</h4>
@@ -224,7 +237,6 @@ window.copyInviteLink = function(groupId) {
     });
 };
 
-// --- שליחת פינג לקבוצה ---
 window.pingGroup = async function(groupId) {
     if(confirm(`לשלוח בקשת עדכון סטטוס (Push) לכל חברי קבוצת ${groupId}?`)) {
         try {
@@ -234,17 +246,14 @@ window.pingGroup = async function(groupId) {
                 body: JSON.stringify({ groupId: groupId, senderName: currentUserName })
             });
             alert('התראה נשלחה בהצלחה לחברי הקבוצה!');
-        } catch (error) {
-            alert('שגיאה בשליחת ההתראה');
-        }
+        } catch (error) { alert('שגיאה בשליחת ההתראה'); }
     }
 };
-// --------------------------
 
 socket.on('new_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
         document.getElementById('alert-banner').classList.remove('hidden');
-        document.getElementById('ping-banner').classList.add('hidden'); // מסתיר פינג אם יש אזעקה אמיתית
+        document.getElementById('ping-banner').classList.add('hidden');
         
         document.querySelector('.action-buttons').classList.remove('hidden');
         document.getElementById('status-message').classList.add('hidden');
@@ -254,11 +263,10 @@ socket.on('new_alert_for_user', (data) => {
     }
 });
 
-// --- קבלת פינג מהשרת ---
 socket.on('ping_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
         document.getElementById('ping-banner').classList.remove('hidden');
-        document.getElementById('alert-banner').classList.add('hidden'); // מסתיר אזעקה
+        document.getElementById('alert-banner').classList.add('hidden');
         document.getElementById('ping-message').innerText = `${data.senderName} מבקש לדעת שכולם בסדר בקבוצה: ${data.groupId}`;
         
         document.querySelector('.action-buttons').classList.remove('hidden');
@@ -268,13 +276,8 @@ socket.on('ping_alert_for_user', (data) => {
         if (currentTimer) clearInterval(currentTimer);
     }
 });
-// -----------------------
 
-const buttons = {
-    'btn-safe': 'protected',
-    'btn-on-way': 'on_the_way',
-    'btn-help': 'needs_help'
-};
+const buttons = { 'btn-safe': 'protected', 'btn-on-way': 'on_the_way', 'btn-help': 'needs_help' };
 
 Object.keys(buttons).forEach(btnId => {
     document.getElementById(btnId).addEventListener('click', () => {
@@ -297,7 +300,7 @@ async function reportStatus(status) {
         if (response.ok) {
             document.querySelector('.action-buttons').classList.add('hidden');
             document.getElementById('alert-banner').classList.add('hidden');
-            document.getElementById('ping-banner').classList.add('hidden'); // מסתיר את באנר הפינג לאחר דיווח
+            document.getElementById('ping-banner').classList.add('hidden');
             
             const statusDiv = document.getElementById('status-message');
             const statusText = document.getElementById('final-status-text');
@@ -319,21 +322,16 @@ async function reportStatus(status) {
                 btnArrived.classList.remove('hidden'); 
             }
         }
-    } catch (error) {
-        alert('שגיאת חיבור לשרת.');
-    }
+    } catch (error) { alert('שגיאת חיבור לשרת.'); }
 }
 
 function startTimer(seconds) {
     if (currentTimer) clearInterval(currentTimer); 
-    
     const timerDisplay = document.getElementById('timer');
     let timeLeft = seconds;
-    
     currentTimer = setInterval(() => {
         timeLeft--;
         timerDisplay.innerText = `זמן להתגוננות: ${timeLeft} שניות`;
-        
         if (timeLeft <= 0) {
             clearInterval(currentTimer);
             timerDisplay.innerText = "הישארו במרחב המוגן!";

@@ -67,7 +67,6 @@ async function sendGroupStateToSocket(socket, groupId) {
 io.on('connection', (socket) => {
     console.log('User connected to socket:', socket.id);
 
-    // --- עדכון הגדרות (שם וערים) מהמסך החדש ---
     socket.on('update_settings', async (data) => {
         const { userId, name, targetCities } = data;
         try {
@@ -83,7 +82,6 @@ io.on('connection', (socket) => {
             console.log(`Settings updated for user ${name}`);
         } catch (err) { console.error('Error updating settings:', err); }
     });
-    // ------------------------------------------
 
     socket.on('join_groups', async (userData) => {
         const { userId, name, groups, targetCities } = userData;
@@ -161,7 +159,6 @@ app.post('/api/register-push', async (req, res) => {
     }
 });
 
-// --- נתיב חדש: שליחת פינג לקבוצה (בדיקת נוכחות) ---
 app.post('/api/ping-group', async (req, res) => {
     const { groupId, senderName } = req.body;
     if (!groupId || !senderName) return res.status(400).json({ error: 'Missing params' });
@@ -185,10 +182,8 @@ app.post('/api/ping-group', async (req, res) => {
                 });
             });
             
-            // שידור סוקט לאפליקציה פתוחה
             io.emit('ping_alert_for_user', { userId: userId, senderName: senderName, groupId: groupId });
 
-            // שידור פוש אמיתי לטלפון
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             if (userPushToken) {
                 const message = {
@@ -210,7 +205,6 @@ app.post('/api/ping-group', async (req, res) => {
         res.status(500).json({error: e.message});
     }
 });
-// ------------------------------------------------
 
 const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
 const OREF_HEADERS = {
