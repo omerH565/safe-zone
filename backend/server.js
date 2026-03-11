@@ -143,25 +143,28 @@ app.post('/api/register-push', async (req, res) => {
     }
 });
 
-const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
+// --- שימוש ב-Proxy כדי לעקוף את החסימה מחו"ל ---
+const OREF_BASE_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
 const OREF_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
     'Referer': 'https://www.oref.org.il/',
-    'X-Requested-With': 'XMLHttpRequest',
-    'Content-Type': 'application/json'
+    'X-Requested-With': 'XMLHttpRequest'
 };
 
 let lastAlertId = 0;
 
 async function pollOrefApi() {
     try {
-        const response = await axios.get(OREF_API_URL, { headers: OREF_HEADERS });
+        // הוספת Timestamp כדי שהפרוקסי לא יחזיר לנו גרסת מטמון (Cache) ישנה
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(OREF_BASE_URL)}&t=${Date.now()}`;
+        
+        const response = await axios.get(proxyUrl, { headers: OREF_HEADERS, timeout: 3000 });
         const data = response.data;
         
         if (data && data.id && data.id !== lastAlertId) {
             lastAlertId = data.id;
             const alertCities = data.data; 
-            console.log(`🚨 אזעקה זוהתה! אזורים: ${alertCities.join(', ')}`);
+            console.log(`🚨 אזעקה זוהתה (דרך הפרוקסי)! אזורים: ${alertCities.join(', ')}`);
             
             const searchCities = alertCities.slice(0, 10);
             const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', searchCities).get();
@@ -200,32 +203,32 @@ async function pollOrefApi() {
             });
         }
     } catch (error) {
-        // שגיאות יושתקו כאן כדי לא להציף את הלוגים, נבדוק בנתיב הידני שלנו
+        // שגיאות מוסתרות כדי לא להציף את הלוג, נשתמש בנתיב הטסט
     }
 }
 
 setInterval(pollOrefApi, 1000);
 
-// --- הנתיב החדש: בודק את החיבור לפיקוד העורף ומחזיר תוצאה ---
 app.get('/api/test-oref', async (req, res) => {
-    console.log("[TEST] Attempting to connect to Oref API...");
+    console.log("[TEST] Attempting to connect to Oref API via Proxy...");
     try {
-        const response = await axios.get(OREF_API_URL, { 
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(OREF_BASE_URL)}&t=${Date.now()}`;
+        const response = await axios.get(proxyUrl, { 
             headers: OREF_HEADERS,
-            timeout: 5000 // טיימאאוט של 5 שניות שלא ייתקע לנצח
+            timeout: 5000 
         });
         
         res.json({
             success: true,
             status: response.status,
             data: response.data || "Empty (No current alerts, which is good!)",
-            message: "✅ Server successfully connected to Oref API from Render!"
+            message: "✅ Server successfully connected to Oref API via Proxy!"
         });
     } catch (error) {
         res.json({
             success: false,
             status: error.response ? error.response.status : 'No Response / Timeout',
-            message: "❌ Failed to connect to Oref. Render might be geo-blocked.",
+            message: "❌ Proxy failed to fetch data.",
             error: error.message
         });
     }
