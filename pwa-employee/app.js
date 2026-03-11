@@ -1,11 +1,24 @@
 const SERVER_URL = 'https://safezone-api-uozd.onrender.com';
 const socket = io(SERVER_URL);
 
+// --- הפעלת פיירבייס בצד הלקוח ---
+const firebaseConfig = {
+    apiKey: "AIzaSyCQmRJgQ9NbWS2CJIaBxvaAkYUFqgOOXwg",
+    authDomain: "safezone-3c456.firebaseapp.com",
+    projectId: "safezone-3c456",
+    storageBucket: "safezone-3c456.firebasestorage.app",
+    messagingSenderId: "497720147146",
+    appId: "1:497720147146:web:47ebabd14ec8b3c4110833"
+};
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
+// ---------------------------------
+
 let currentUserId = localStorage.getItem('safeZone_userId');
 let currentUserName = localStorage.getItem('safeZone_userName');
 let userGroups = JSON.parse(localStorage.getItem('safeZone_groups') || '[]');
 let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '["תל אביב - מרכז"]');
-let currentTimer; // משתנה לשמירת הטיימר כדי שנוכל לאפס אותו
+let currentTimer; 
 
 const onboardingModal = document.getElementById('onboarding-modal');
 const mainApp = document.getElementById('main-app');
@@ -51,6 +64,7 @@ function initApp() {
             }
             
             connectToServer();
+            requestPushPermission(); // בקשת אישור פוש אחרי לחיצה על "התחל"
         });
     } else {
         mainApp.classList.remove('hidden');
@@ -61,8 +75,35 @@ function initApp() {
         }
         
         connectToServer();
+        requestPushPermission(); // בדיקת אישור גם למשתמשים חוזרים
     }
 }
+
+// פונקציה שמבקשת אישור מהמשתמש ושולחת את הטוקן לשרת
+async function requestPushPermission() {
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            const token = await messaging.getToken({ vapidKey: "BJnoSnDhaKPdrWuM74yrJ9EKGhORjs_n_tWOU_2AvPAXim29RHYJilycEChrjtbpp7boSvIn8PwCj37vjYd9s4M" });
+            if (token) {
+                console.log("Push token received:", token);
+                await fetch(`${SERVER_URL}/api/register-push`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentUserId, token: token })
+                });
+            }
+        }
+    } catch (error) {
+        console.error("Error getting push token:", error);
+    }
+}
+
+// תפיסת אזעקה בפוש כשהאפליקציה פתוחה
+messaging.onMessage((payload) => {
+    console.log("Foreground Push received:", payload);
+    // ה-socket שלנו כבר יטפל בהקפצת המסך, אבל זה כאן ליתר ביטחון
+});
 
 function handleJoinGroup(groupId) {
     if (!userGroups.includes(groupId)) {
@@ -144,12 +185,10 @@ window.copyInviteLink = function(groupId) {
     });
 };
 
-// --- התיקון: איפוס מסך המשתמש באזעקה חדשה ---
 socket.on('new_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
         document.getElementById('alert-banner').classList.remove('hidden');
         
-        // החזרת כפתורי הדיווח והסתרת מסך הסיום הקודם
         document.querySelector('.action-buttons').classList.remove('hidden');
         document.getElementById('status-message').classList.add('hidden');
         document.getElementById('btn-arrived').classList.add('hidden');
@@ -210,7 +249,7 @@ async function reportStatus(status) {
 }
 
 function startTimer(seconds) {
-    if (currentTimer) clearInterval(currentTimer); // מנקה טיימר קודם אם יש אזעקה רודפת אזעקה
+    if (currentTimer) clearInterval(currentTimer); 
     
     const timerDisplay = document.getElementById('timer');
     let timeLeft = seconds;

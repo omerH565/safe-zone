@@ -126,18 +126,24 @@ io.on('connection', (socket) => {
     });
 });
 
-app.post('/api/register-push', (req, res) => {
+// עדכון נתיב ה-Push: שומר גם ל-Firestore שיהיה מגובה לנצח
+app.post('/api/register-push', async (req, res) => {
     const { userId, token } = req.body;
     if (userId && token) {
         userPushTokens.set(userId, token);
-        console.log(`Push token registered for user ${userId}`);
+        console.log(`Push token registered in memory for user ${userId}`);
+        try {
+            await db.collection('users').doc(userId).set({ pushToken: token }, { merge: true });
+            console.log(`Push token saved to Firestore for user ${userId}`);
+        } catch (error) {
+            console.error("Error saving token to DB:", error);
+        }
         res.status(200).send({ success: true });
     } else {
         res.status(400).send({ error: 'Missing parameters' });
     }
 });
 
-// --- המוח שמקשיב לפיקוד העורף ---
 const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
 const OREF_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -179,30 +185,30 @@ async function pollOrefApi() {
                 
                 io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
 
-                const userPushToken = userPushTokens.get(userId);
+                // --- שיגור פוש אמיתי מפיקוד העורף ---
+                const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
                 if (userPushToken) {
                     const message = {
                         notification: {
                             title: '🚨 אזעקה באזורך!',
                             body: `התרעה הופעלה באזורים: ${alertCities.slice(0, 3).join(', ')}. היכנס מיד למרחב מוגן.`
                         },
-                        token: userPushToken,
-                        webpush: { fcmOptions: { link: '/' } }
+                        token: userPushToken
                     };
-                    console.log(`[Simulation] PUSH notification targeted for user ${userRecord.name}.`);
+                    admin.messaging().send(message)
+                        .then(res => console.log(`Push sent successfully to ${userRecord.name}`))
+                        .catch(err => console.error('Error sending Push:', err));
                 }
             });
         }
     } catch (error) {
-        // התעלמות משגיאות רשת שוטפות של פיקוד העורף (קורה הרבה מחו"ל)
+        // התעלמות משגיאות רשת
     }
 }
 
 setInterval(pollOrefApi, 1000);
 
-// --- נתיב חדש: סימולטור אזעקות לבדיקת המערכת! ---
 app.get('/api/simulate-alert', async (req, res) => {
-    // מאפשר להעביר עיר ספציפית ב-URL, או ברירת מחדל ת"א
     const city = req.query.city || 'תל אביב - מרכז';
     console.log(`[SIMULATOR] Triggering fake alert for: ${city}`);
 
@@ -214,7 +220,6 @@ app.get('/api/simulate-alert', async (req, res) => {
             const userId = doc.id;
             const userRecord = doc.data();
             
-            // איפוס הסטטוס למשתמשים בעיר
             usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
             const userGroups = userRecord.groups || [];
@@ -227,8 +232,22 @@ app.get('/api/simulate-alert', async (req, res) => {
                 });
             });
             
-            // שידור האזעקה לאפליקציות הפתוחות
             io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
+
+            // --- שיגור פוש אמיתי בסימולטור! ---
+            const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
+            if (userPushToken) {
+                const message = {
+                    notification: {
+                        title: '🚨 אזעקה באזורך (סימולציה)!',
+                        body: `התרעה הופעלה באזורים: ${alertCities.join(', ')}. היכנס מיד למרחב מוגן.`
+                    },
+                    token: userPushToken
+                };
+                admin.messaging().send(message)
+                    .then(r => console.log(`Push sent successfully to ${userRecord.name}`))
+                    .catch(err => console.error('Error sending Push:', err));
+            }
         });
 
         res.json({ success: true, message: `🚨 Simulated alert triggered successfully for ${city}` });
