@@ -126,7 +126,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// עדכון נתיב ה-Push: שומר גם ל-Firestore שיהיה מגובה לנצח
 app.post('/api/register-push', async (req, res) => {
     const { userId, token } = req.body;
     if (userId && token) {
@@ -185,7 +184,6 @@ async function pollOrefApi() {
                 
                 io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
 
-                // --- שיגור פוש אמיתי מפיקוד העורף ---
                 const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
                 if (userPushToken) {
                     const message = {
@@ -202,11 +200,36 @@ async function pollOrefApi() {
             });
         }
     } catch (error) {
-        // התעלמות משגיאות רשת
+        // שגיאות יושתקו כאן כדי לא להציף את הלוגים, נבדוק בנתיב הידני שלנו
     }
 }
 
 setInterval(pollOrefApi, 1000);
+
+// --- הנתיב החדש: בודק את החיבור לפיקוד העורף ומחזיר תוצאה ---
+app.get('/api/test-oref', async (req, res) => {
+    console.log("[TEST] Attempting to connect to Oref API...");
+    try {
+        const response = await axios.get(OREF_API_URL, { 
+            headers: OREF_HEADERS,
+            timeout: 5000 // טיימאאוט של 5 שניות שלא ייתקע לנצח
+        });
+        
+        res.json({
+            success: true,
+            status: response.status,
+            data: response.data || "Empty (No current alerts, which is good!)",
+            message: "✅ Server successfully connected to Oref API from Render!"
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            status: error.response ? error.response.status : 'No Response / Timeout',
+            message: "❌ Failed to connect to Oref. Render might be geo-blocked.",
+            error: error.message
+        });
+    }
+});
 
 app.get('/api/simulate-alert', async (req, res) => {
     const city = req.query.city || 'תל אביב - מרכז';
@@ -234,7 +257,6 @@ app.get('/api/simulate-alert', async (req, res) => {
             
             io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
 
-            // --- שיגור פוש אמיתי בסימולטור! ---
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             if (userPushToken) {
                 const message = {
