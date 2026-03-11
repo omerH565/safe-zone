@@ -1,7 +1,6 @@
 const SERVER_URL = 'https://safezone-api-uozd.onrender.com';
 const socket = io(SERVER_URL);
 
-// --- הפעלת פיירבייס בצד הלקוח ---
 const firebaseConfig = {
     apiKey: "AIzaSyCQmRJgQ9NbWS2CJIaBxvaAkYUFqgOOXwg",
     authDomain: "safezone-3c456.firebaseapp.com",
@@ -12,7 +11,6 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
-// ---------------------------------
 
 let currentUserId = localStorage.getItem('safeZone_userId');
 let currentUserName = localStorage.getItem('safeZone_userName');
@@ -21,6 +19,7 @@ let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '["תל �
 let currentTimer; 
 
 const onboardingModal = document.getElementById('onboarding-modal');
+const settingsModal = document.getElementById('settings-modal');
 const mainApp = document.getElementById('main-app');
 const greetingTitle = document.getElementById('greeting-title');
 const groupsList = document.getElementById('groups-list');
@@ -64,7 +63,7 @@ function initApp() {
             }
             
             connectToServer();
-            requestPushPermission(); // בקשת אישור פוש אחרי לחיצה על "התחל"
+            requestPushPermission();
         });
     } else {
         mainApp.classList.remove('hidden');
@@ -75,18 +74,56 @@ function initApp() {
         }
         
         connectToServer();
-        requestPushPermission(); // בדיקת אישור גם למשתמשים חוזרים
+        requestPushPermission();
     }
 }
 
-// פונקציה שמבקשת אישור מהמשתמש ושולחת את הטוקן לשרת
+// --- ניהול הגדרות ---
+document.getElementById('btn-settings').addEventListener('click', () => {
+    document.getElementById('settings-username').value = currentUserName;
+    const checkboxes = document.querySelectorAll('#settings-city-selector input');
+    checkboxes.forEach(cb => {
+        cb.checked = userCities.includes(cb.value);
+    });
+    settingsModal.classList.remove('hidden');
+});
+
+document.getElementById('btn-close-settings').addEventListener('click', () => {
+    settingsModal.classList.add('hidden');
+});
+
+document.getElementById('btn-save-settings').addEventListener('click', () => {
+    const newName = document.getElementById('settings-username').value.trim();
+    const newCities = Array.from(document.querySelectorAll('#settings-city-selector input:checked')).map(cb => cb.value);
+    
+    if (newName === '' || newCities.length === 0) {
+        alert('חובה למלא שם ולבחור לפחות עיר אחת');
+        return;
+    }
+
+    currentUserName = newName;
+    userCities = newCities;
+    localStorage.setItem('safeZone_userName', currentUserName);
+    localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
+    
+    socket.emit('update_settings', {
+        userId: currentUserId,
+        name: currentUserName,
+        targetCities: userCities
+    });
+
+    settingsModal.classList.add('hidden');
+    greetingTitle.innerText = `שלום, ${currentUserName}`;
+});
+// --------------------
+
 async function requestPushPermission() {
     try {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
             const token = await messaging.getToken({ vapidKey: "BJnoSnDhaKPdrWuM74yrJ9EKGhORjs_n_tWOU_2AvPAXim29RHYJilycEChrjtbpp7boSvIn8PwCj37vjYd9s4M" });
             if (token) {
-                console.log("Push token received:", token);
+                console.log("Push token received");
                 await fetch(`${SERVER_URL}/api/register-push`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -99,10 +136,8 @@ async function requestPushPermission() {
     }
 }
 
-// תפיסת אזעקה בפוש כשהאפליקציה פתוחה
 messaging.onMessage((payload) => {
     console.log("Foreground Push received:", payload);
-    // ה-socket שלנו כבר יטפל בהקפצת המסך, אבל זה כאן ליתר ביטחון
 });
 
 function handleJoinGroup(groupId) {
@@ -141,10 +176,14 @@ socket.on('group_member_status', (data) => {
         groupDiv = document.createElement('div');
         groupDiv.id = `group-${groupId}`;
         groupDiv.className = 'group-card';
+        // הוספתי כאן את כפתור "בדיקת הנוכחות" (פינג)
         groupDiv.innerHTML = `
             <div class="group-header" style="display: flex; justify-content: space-between; border-bottom: 1px solid #374151; padding-bottom: 5px; margin-bottom: 10px;">
                 <h4 style="margin: 0; color: #9ca3af;">${groupId}</h4>
-                <button onclick="copyInviteLink('${groupId}')" style="background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 0.9rem;">🔗 הזמן חברים</button>
+                <div>
+                    <button onclick="pingGroup('${groupId}')" style="background: none; border: none; color: #eab308; cursor: pointer; font-size: 0.9rem; margin-left: 10px;">🔔 בקש עדכון סטטוס</button>
+                    <button onclick="copyInviteLink('${groupId}')" style="background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 0.9rem;">🔗 הזמן חברים</button>
+                </div>
             </div>
             <div class="members-container" id="members-${groupId}"></div>
         `;
@@ -185,9 +224,27 @@ window.copyInviteLink = function(groupId) {
     });
 };
 
+// --- שליחת פינג לקבוצה ---
+window.pingGroup = async function(groupId) {
+    if(confirm(`לשלוח בקשת עדכון סטטוס (Push) לכל חברי קבוצת ${groupId}?`)) {
+        try {
+            await fetch(`${SERVER_URL}/api/ping-group`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId: groupId, senderName: currentUserName })
+            });
+            alert('התראה נשלחה בהצלחה לחברי הקבוצה!');
+        } catch (error) {
+            alert('שגיאה בשליחת ההתראה');
+        }
+    }
+};
+// --------------------------
+
 socket.on('new_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
         document.getElementById('alert-banner').classList.remove('hidden');
+        document.getElementById('ping-banner').classList.add('hidden'); // מסתיר פינג אם יש אזעקה אמיתית
         
         document.querySelector('.action-buttons').classList.remove('hidden');
         document.getElementById('status-message').classList.add('hidden');
@@ -196,6 +253,22 @@ socket.on('new_alert_for_user', (data) => {
         startTimer(90);
     }
 });
+
+// --- קבלת פינג מהשרת ---
+socket.on('ping_alert_for_user', (data) => {
+    if(data.userId === currentUserId) {
+        document.getElementById('ping-banner').classList.remove('hidden');
+        document.getElementById('alert-banner').classList.add('hidden'); // מסתיר אזעקה
+        document.getElementById('ping-message').innerText = `${data.senderName} מבקש לדעת שכולם בסדר בקבוצה: ${data.groupId}`;
+        
+        document.querySelector('.action-buttons').classList.remove('hidden');
+        document.getElementById('status-message').classList.add('hidden');
+        document.getElementById('btn-arrived').classList.add('hidden');
+        
+        if (currentTimer) clearInterval(currentTimer);
+    }
+});
+// -----------------------
 
 const buttons = {
     'btn-safe': 'protected',
@@ -223,6 +296,9 @@ async function reportStatus(status) {
 
         if (response.ok) {
             document.querySelector('.action-buttons').classList.add('hidden');
+            document.getElementById('alert-banner').classList.add('hidden');
+            document.getElementById('ping-banner').classList.add('hidden'); // מסתיר את באנר הפינג לאחר דיווח
+            
             const statusDiv = document.getElementById('status-message');
             const statusText = document.getElementById('final-status-text');
             const btnArrived = document.getElementById('btn-arrived'); 

@@ -67,6 +67,24 @@ async function sendGroupStateToSocket(socket, groupId) {
 io.on('connection', (socket) => {
     console.log('User connected to socket:', socket.id);
 
+    // --- עדכון הגדרות (שם וערים) מהמסך החדש ---
+    socket.on('update_settings', async (data) => {
+        const { userId, name, targetCities } = data;
+        try {
+            const finalCities = deriveAlertAreas(targetCities || ['תל אביב - מרכז']);
+            await db.collection('users').doc(userId).update({
+                name: name,
+                targetCities: finalCities
+            });
+            
+            if (usersStatus.has(userId)) {
+                usersStatus.get(userId).name = name;
+            }
+            console.log(`Settings updated for user ${name}`);
+        } catch (err) { console.error('Error updating settings:', err); }
+    });
+    // ------------------------------------------
+
     socket.on('join_groups', async (userData) => {
         const { userId, name, groups, targetCities } = userData;
         try {
@@ -143,28 +161,76 @@ app.post('/api/register-push', async (req, res) => {
     }
 });
 
-// --- שימוש ב-Proxy כדי לעקוף את החסימה מחו"ל ---
-const OREF_BASE_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
+// --- נתיב חדש: שליחת פינג לקבוצה (בדיקת נוכחות) ---
+app.post('/api/ping-group', async (req, res) => {
+    const { groupId, senderName } = req.body;
+    if (!groupId || !senderName) return res.status(400).json({ error: 'Missing params' });
+
+    try {
+        const snapshot = await db.collection('users').where('groups', 'array-contains', groupId).get();
+        
+        snapshot.forEach(doc => {
+            const userId = doc.id;
+            const userRecord = doc.data();
+            
+            usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
+            
+            const userGroups = userRecord.groups || [];
+            userGroups.forEach(group => {
+                io.to(group).emit('group_member_status', { 
+                    userId: userId, 
+                    name: userRecord.name, 
+                    status: 'pending', 
+                    groupId: group 
+                });
+            });
+            
+            // שידור סוקט לאפליקציה פתוחה
+            io.emit('ping_alert_for_user', { userId: userId, senderName: senderName, groupId: groupId });
+
+            // שידור פוש אמיתי לטלפון
+            const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
+            if (userPushToken) {
+                const message = {
+                    notification: {
+                        title: `🔔 בדיקת נוכחות: קבוצת ${groupId}`,
+                        body: `${senderName} מבקש לדעת שכולם בסדר. היכנסו לעדכן סטטוס!`
+                    },
+                    token: userPushToken
+                };
+                admin.messaging().send(message)
+                    .then(r => console.log(`Ping Push sent to ${userRecord.name}`))
+                    .catch(err => console.error('Error sending Ping Push:', err));
+            }
+        });
+
+        res.json({ success: true });
+    } catch(e) {
+        console.error("Error pinging group:", e);
+        res.status(500).json({error: e.message});
+    }
+});
+// ------------------------------------------------
+
+const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
 const OREF_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
     'Referer': 'https://www.oref.org.il/',
-    'X-Requested-With': 'XMLHttpRequest'
+    'X-Requested-With': 'XMLHttpRequest',
+    'Content-Type': 'application/json'
 };
 
 let lastAlertId = 0;
 
 async function pollOrefApi() {
     try {
-        // הוספת Timestamp כדי שהפרוקסי לא יחזיר לנו גרסת מטמון (Cache) ישנה
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(OREF_BASE_URL)}&t=${Date.now()}`;
-        
-        const response = await axios.get(proxyUrl, { headers: OREF_HEADERS, timeout: 3000 });
+        const response = await axios.get(OREF_API_URL, { headers: OREF_HEADERS, timeout: 3000 });
         const data = response.data;
         
         if (data && data.id && data.id !== lastAlertId) {
             lastAlertId = data.id;
             const alertCities = data.data; 
-            console.log(`🚨 אזעקה זוהתה (דרך הפרוקסי)! אזורים: ${alertCities.join(', ')}`);
+            console.log(`🚨 אזעקה זוהתה! אזורים: ${alertCities.join(', ')}`);
             
             const searchCities = alertCities.slice(0, 10);
             const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', searchCities).get();
@@ -196,98 +262,55 @@ async function pollOrefApi() {
                         },
                         token: userPushToken
                     };
-                    admin.messaging().send(message)
-                        .then(res => console.log(`Push sent successfully to ${userRecord.name}`))
-                        .catch(err => console.error('Error sending Push:', err));
+                    admin.messaging().send(message).catch(err => console.error(err));
                 }
             });
         }
-    } catch (error) {
-        // שגיאות מוסתרות כדי לא להציף את הלוג, נשתמש בנתיב הטסט
-    }
+    } catch (error) {}
 }
 
 setInterval(pollOrefApi, 1000);
 
 app.get('/api/test-oref', async (req, res) => {
-    console.log("[TEST] Attempting to connect to Oref API via Proxy...");
     try {
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(OREF_BASE_URL)}&t=${Date.now()}`;
-        const response = await axios.get(proxyUrl, { 
-            headers: OREF_HEADERS,
-            timeout: 5000 
-        });
-        
-        res.json({
-            success: true,
-            status: response.status,
-            data: response.data || "Empty (No current alerts, which is good!)",
-            message: "✅ Server successfully connected to Oref API via Proxy!"
-        });
+        const response = await axios.get(OREF_API_URL, { headers: OREF_HEADERS, timeout: 5000 });
+        res.json({ success: true, status: response.status, data: response.data, message: "✅ Connected to Oref API!" });
     } catch (error) {
-        res.json({
-            success: false,
-            status: error.response ? error.response.status : 'No Response / Timeout',
-            message: "❌ Proxy failed to fetch data.",
-            error: error.message
-        });
+        res.json({ success: false, status: error.response ? error.response.status : 'No Response', message: "❌ Failed." });
     }
 });
 
 app.get('/api/simulate-alert', async (req, res) => {
     const city = req.query.city || 'תל אביב - מרכז';
-    console.log(`[SIMULATOR] Triggering fake alert for: ${city}`);
-
     try {
-        const alertCities = [city];
-        const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', alertCities).get();
-        
+        const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', [city]).get();
         snapshot.forEach(doc => {
             const userId = doc.id;
             const userRecord = doc.data();
             
             usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
-            const userGroups = userRecord.groups || [];
-            userGroups.forEach(group => {
-                io.to(group).emit('group_member_status', { 
-                    userId: userId, 
-                    name: userRecord.name, 
-                    status: 'pending', 
-                    groupId: group 
-                });
+            (userRecord.groups || []).forEach(group => {
+                io.to(group).emit('group_member_status', { userId, name: userRecord.name, status: 'pending', groupId: group });
             });
             
-            io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
+            io.emit('new_alert_for_user', { userId, cities: [city] });
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             if (userPushToken) {
-                const message = {
-                    notification: {
-                        title: '🚨 אזעקה באזורך (סימולציה)!',
-                        body: `התרעה הופעלה באזורים: ${alertCities.join(', ')}. היכנס מיד למרחב מוגן.`
-                    },
+                admin.messaging().send({
+                    notification: { title: '🚨 אזעקה באזורך (סימולציה)!', body: `התרעה: ${city}` },
                     token: userPushToken
-                };
-                admin.messaging().send(message)
-                    .then(r => console.log(`Push sent successfully to ${userRecord.name}`))
-                    .catch(err => console.error('Error sending Push:', err));
+                }).catch(err => console.error(err));
             }
         });
-
-        res.json({ success: true, message: `🚨 Simulated alert triggered successfully for ${city}` });
-    } catch (error) {
-        console.error("Error in simulator:", error);
-        res.status(500).json({ error: 'Failed to trigger simulation' });
-    }
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
 app.post('/api/status', async (req, res) => {
     const { userId, status } = req.body;
-    
-    if (!userId || !status) {
-        return res.status(400).json({ error: 'Missing parameters' });
-    }
+    if (!userId || !status) return res.status(400).json({ error: 'Missing params' });
 
     try {
         const doc = await db.collection('users').doc(userId).get();
@@ -298,27 +321,14 @@ app.post('/api/status', async (req, res) => {
         io.emit('status_update', { userId, name: userName, status });
 
         userGroups.forEach(group => {
-            io.to(group).emit('group_member_status', { 
-                userId, 
-                name: userName, 
-                status, 
-                groupId: group 
-            });
+            io.to(group).emit('group_member_status', { userId, name: userName, status, groupId: group });
         });
-
-        res.status(200).json({ success: true, message: 'Status updated successfully' });
-    } catch (err) {
-        console.error("Error in status update:", err);
-        res.status(500).json({ error: 'Database error' });
-    }
+        res.status(200).json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Database error' }); }
 });
 
 app.get('/api/all-status', (req, res) => {
-    const allStatuses = Array.from(usersStatus.entries()).map(([userId, data]) => ({
-        userId,
-        ...data
-    }));
-    res.json(allStatuses);
+    res.json(Array.from(usersStatus.entries()).map(([userId, data]) => ({ userId, ...data })));
 });
 
 const PORT = process.env.PORT || 3000;
