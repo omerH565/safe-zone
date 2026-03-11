@@ -5,10 +5,12 @@ const http = require('http');
 const { Server } = require('socket.io');
 const admin = require('firebase-admin');
 
-// const serviceAccount = require('./firebase-adminsdk.json');
-// admin.initializeApp({
-//   credential: admin.credential.cert(serviceAccount)
-// });
+// חיבור למסד הנתונים של פיירבייס!
+const serviceAccount = require('./firebase-adminsdk.json');
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+const db = admin.firestore();
 
 const app = express();
 app.use(cors());
@@ -19,15 +21,19 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
+// זיכרון זמני רק לסטטוס החירום (כדי לחסוך קריאות כתיבה לדאטה-בייס בזמן אזעקה)
 const usersStatus = new Map();
 const userPushTokens = new Map();
 
-// מסד נתונים דינמי - מתחיל ריק לחלוטין! (בשלב 2 נחליף את זה במסד נתונים אמיתי)
-const userGroupsDB = {};
-
-function sendGroupStateToSocket(socket, groupId) {
-    for (const [uid, record] of Object.entries(userGroupsDB)) {
-        if (record.groups.includes(groupId)) {
+// פונקציה לשליפת חברי הקבוצה מה-DB
+async function sendGroupStateToSocket(socket, groupId) {
+    try {
+        // שולף מ-Firestore את כל המשתמשים שהקבוצה הזו נמצאת במערך הקבוצות שלהם
+        const snapshot = await db.collection('users').where('groups', 'array-contains', groupId).get();
+        
+        snapshot.forEach(doc => {
+            const uid = doc.id;
+            const record = doc.data();
             const statusData = usersStatus.get(uid);
             const currentStatus = statusData ? statusData.status : 'pending';
             
@@ -37,58 +43,75 @@ function sendGroupStateToSocket(socket, groupId) {
                 status: currentStatus,
                 groupId: groupId
             });
-        }
+        });
+    } catch (error) {
+        console.error("Error fetching group state:", error);
     }
 }
 
 io.on('connection', (socket) => {
     console.log('User connected to socket:', socket.id);
 
-    // התחברות של משתמש קיים עם מערך הקבוצות שלו
-    socket.on('join_groups', (userData) => {
+    // התחברות של משתמש קיים
+    socket.on('join_groups', async (userData) => {
         const { userId, name, groups } = userData;
-        
-        // יצירה או עדכון של המשתמש בזיכרון השרת
-        if (!userGroupsDB[userId]) {
-            userGroupsDB[userId] = { name: name, groups: [], targetCities: ['תל אביב - יפו'] };
-        }
-        userGroupsDB[userId].name = name;
-        
-        if (groups && Array.isArray(groups)) {
-            groups.forEach(group => {
-                if (!userGroupsDB[userId].groups.includes(group)) {
-                    userGroupsDB[userId].groups.push(group);
-                }
-                socket.join(group);
-                console.log(`User ${name} joined group: ${group}`);
-                sendGroupStateToSocket(socket, group);
-            });
-        }
+        try {
+            const userRef = db.collection('users').doc(userId);
+            const doc = await userRef.get();
+            let targetCities = ['תל אביב - יפו'];
+
+            if (doc.exists) {
+                const data = doc.data();
+                targetCities = data.targetCities || targetCities;
+                // מיזוג קבוצות חדשות וישנות
+                const existingGroups = data.groups || [];
+                const mergedGroups = [...new Set([...existingGroups, ...(groups || [])])];
+                await userRef.update({ name, groups: mergedGroups });
+            } else {
+                await userRef.set({ name, groups: groups || [], targetCities });
+            }
+
+            if (groups && Array.isArray(groups)) {
+                groups.forEach(group => {
+                    socket.join(group);
+                    console.log(`User ${name} joined group: ${group}`);
+                    sendGroupStateToSocket(socket, group);
+                });
+            }
+        } catch (err) { console.error("Error in join_groups:", err); }
     });
 
     // הצטרפות לקבוצה חדשה (דרך לינק)
-    socket.on('join_via_link', (data) => {
+    socket.on('join_via_link', async (data) => {
         const { userId, name, groupId, targetCities } = data;
-        
-        if (!userGroupsDB[userId]) {
-            userGroupsDB[userId] = { name: name, groups: [], targetCities: targetCities || ['תל אביב - יפו'] };
-        }
-        
-        if (!userGroupsDB[userId].groups.includes(groupId)) {
-            userGroupsDB[userId].groups.push(groupId);
-        }
-        
-        socket.join(groupId);
-        console.log(`User ${name} (${userId}) dynamically joined group: ${groupId}`);
-        
-        io.to(groupId).emit('group_member_status', { 
-            userId, 
-            name: name, 
-            status: 'pending', 
-            groupId 
-        });
+        try {
+            const userRef = db.collection('users').doc(userId);
+            const doc = await userRef.get();
+            let finalCities = targetCities || ['תל אביב - יפו'];
 
-        sendGroupStateToSocket(socket, groupId);
+            if (doc.exists) {
+                const existingData = doc.data();
+                const existingGroups = existingData.groups || [];
+                if (!existingGroups.includes(groupId)) {
+                    existingGroups.push(groupId);
+                }
+                await userRef.update({ name, groups: existingGroups });
+            } else {
+                await userRef.set({ name, groups: [groupId], targetCities: finalCities });
+            }
+
+            socket.join(groupId);
+            console.log(`User ${name} (${userId}) dynamically joined group: ${groupId}`);
+            
+            io.to(groupId).emit('group_member_status', { 
+                userId, 
+                name, 
+                status: 'pending', 
+                groupId 
+            });
+
+            sendGroupStateToSocket(socket, groupId);
+        } catch (err) { console.error("Error in join_via_link:", err); }
     });
 });
 
@@ -123,52 +146,60 @@ async function pollOrefApi() {
             const alertCities = data.data; 
             console.log(`🚨 אזעקה זוהתה! אזורים: ${alertCities.join(', ')}`);
             
-            for (const [userId, userRecord] of Object.entries(userGroupsDB)) {
+            // מבצעים חיתוך (לוקחים עד 10 אזורים בגלל מגבלה של פיירבייס בשאילתה)
+            const searchCities = alertCities.slice(0, 10);
+            
+            // שאילתה ישירה ל-DB: תביא רק משתמשים שהאזעקה רלוונטית לעיר שלהם!
+            const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', searchCities).get();
+            
+            snapshot.forEach(doc => {
+                const userId = doc.id;
+                const userRecord = doc.data();
                 
-                const isRelevantForUser = userRecord.targetCities.some(city => alertCities.includes(city));
-                
-                if (isRelevantForUser) {
-                    io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
+                io.emit('new_alert_for_user', { userId: userId, cities: alertCities });
 
-                    const userPushToken = userPushTokens.get(userId);
-                    if (userPushToken) {
-                        const message = {
-                            notification: {
-                                title: '🚨 אזעקה באזורך!',
-                                body: `התרעה הופעלה באזורים: ${alertCities.slice(0, 3).join(', ')}. היכנס מיד למרחב מוגן.`
-                            },
-                            token: userPushToken,
-                            webpush: { fcmOptions: { link: '/' } }
-                        };
-                        
-                        // admin.messaging().send(message).catch(err => console.log(err));
-                        console.log(`[Simulation] PUSH notification targeted for user ${userRecord.name}.`);
-                    }
+                const userPushToken = userPushTokens.get(userId);
+                if (userPushToken) {
+                    const message = {
+                        notification: {
+                            title: '🚨 אזעקה באזורך!',
+                            body: `התרעה הופעלה באזורים: ${alertCities.slice(0, 3).join(', ')}. היכנס מיד למרחב מוגן.`
+                        },
+                        token: userPushToken,
+                        webpush: { fcmOptions: { link: '/' } }
+                    };
+                    
+                    // admin.messaging().send(message).catch(err => console.log(err));
+                    console.log(`[Simulation] PUSH notification targeted for user ${userRecord.name}.`);
                 }
-            }
+            });
         }
     } catch (error) {
-        // התעלמות משגיאות רשת שוטפות
+        // התעלמות משגיאות רשת שוטפות של פיקוד העורף
     }
 }
 
 setInterval(pollOrefApi, 1000);
 
-app.post('/api/status', (req, res) => {
+app.post('/api/status', async (req, res) => {
     const { userId, status } = req.body;
     
     if (!userId || !status) {
         return res.status(400).json({ error: 'Missing parameters' });
     }
 
-    const userName = userGroupsDB[userId] ? userGroupsDB[userId].name : 'משתמש לא ידוע';
-    usersStatus.set(userId, { name: userName, status, time: new Date() });
-    
-    io.emit('status_update', { userId, name: userName, status });
+    try {
+        // שליפת פרטי המשתמש מה-DB
+        const doc = await db.collection('users').doc(userId).get();
+        const userName = doc.exists ? doc.data().name : 'משתמש לא ידוע';
+        const userGroups = doc.exists ? (doc.data().groups || []) : [];
 
-    const userRecord = userGroupsDB[userId];
-    if (userRecord && userRecord.groups) {
-        userRecord.groups.forEach(group => {
+        usersStatus.set(userId, { name: userName, status, time: new Date() });
+        
+        io.emit('status_update', { userId, name: userName, status });
+
+        // עדכון כל הקבוצות שהמשתמש חבר בהן
+        userGroups.forEach(group => {
             io.to(group).emit('group_member_status', { 
                 userId, 
                 name: userName, 
@@ -176,9 +207,12 @@ app.post('/api/status', (req, res) => {
                 groupId: group 
             });
         });
-    }
 
-    res.status(200).json({ success: true, message: 'Status updated successfully' });
+        res.status(200).json({ success: true, message: 'Status updated successfully' });
+    } catch (err) {
+        console.error("Error in status update:", err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 app.get('/api/all-status', (req, res) => {
