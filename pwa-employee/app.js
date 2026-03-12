@@ -27,7 +27,7 @@ let userGroups = JSON.parse(localStorage.getItem('safeZone_groups') || '[]');
 let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '[]');
 let currentTimer; 
 let stopwatchInterval;
-let shelterInterval; // שעון העצר החדש לשהייה בממ"ד
+let shelterInterval; 
 
 function isRunningAsPWA() {
     return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -298,8 +298,6 @@ function connectToServer() {
         groups: userGroups, 
         targetCities: userCities 
     });
-    
-    // --- התיקון הקריטי: שואלים את השרת אם פספסנו משהו בזמן שישנו ---
     socket.emit('check_active_alert', currentUserId);
 }
 
@@ -381,6 +379,9 @@ socket.on('new_alert_for_user', (data) => {
         document.getElementById('alert-banner').classList.remove('hidden');
         document.getElementById('ping-banner').classList.add('hidden');
         document.getElementById('all-clear-banner').classList.add('hidden');
+        
+        // --- מחזירים את ההבהוב בכל אזעקה חדשה שמגיעה ---
+        document.getElementById('alert-banner').style.animation = 'pulse 1.5s infinite';
         
         const currentStatusMsg = document.getElementById('status-message');
         if (currentStatusMsg.classList.contains('hidden')) {
@@ -464,6 +465,9 @@ function startShelterStopwatch(shelterStartTimeMs) {
     if (shelterInterval) clearInterval(shelterInterval);
     const timerDisplay = document.getElementById('timer');
     
+    // --- מפסיקים את ההבהוב המעיק כשהספירה לאחור נגמרת ---
+    document.getElementById('alert-banner').style.animation = 'none';
+    
     // עדכון ראשוני מיידי
     updateShelterDisplay(shelterStartTimeMs, timerDisplay);
     
@@ -486,7 +490,7 @@ function startTimer(durationSeconds, startTimeMs) {
     if (durationSeconds - initialElapsed <= 0) {
         const exactShelterStartTime = startTimestamp + (durationSeconds * 1000);
         startShelterStopwatch(exactShelterStartTime);
-        return; // עוצר את יצירת הטיימר הרגיל
+        return; 
     }
     
     currentTimer = setInterval(() => {
