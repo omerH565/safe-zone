@@ -200,6 +200,27 @@ io.on('connection', (socket) => {
             console.error("Error in join_via_link:", err);
         }
     });
+    // --- מנגנון התאוששות מאפליקציה סגורה / לחיצה על Push ---
+    socket.on('check_active_alert', (userId) => {
+        if (!userId) return;
+        const lastAlertData = userLastAlert.get(userId);
+        const now = Date.now();
+        
+        // אם למשתמש יש אזעקה אקטיבית מה-12 דקות האחרונות
+        if (lastAlertData && (now - lastAlertData.time < 12 * 60 * 1000)) {
+            console.log(`[State Recovery] Resending active alert to ${userId} after Push click`);
+            
+            const isEarlyWarning = lastAlertData.type === 'warning';
+            
+            // משדרים לו מחדש את האזעקה עם זמן ההתחלה המקורי!
+            socket.emit('new_alert_for_user', { 
+                userId: userId, 
+                cities: ['אזורך'], // המערכת לא עושה בזה שימוש כרגע, העיקר שיש ערך
+                startTime: lastAlertData.time, 
+                isEarlyWarning: isEarlyWarning 
+            });
+        }
+    });
 });
 
 app.get('/api/user/:userId', async (req, res) => {

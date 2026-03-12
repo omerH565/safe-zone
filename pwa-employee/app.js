@@ -298,6 +298,9 @@ function connectToServer() {
         groups: userGroups, 
         targetCities: userCities 
     });
+    
+    // --- התיקון הקריטי: שואלים את השרת אם פספסנו משהו בזמן שישנו ---
+    socket.emit('check_active_alert', currentUserId);
 }
 
 socket.on('group_member_status', (data) => {
