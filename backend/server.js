@@ -5,11 +5,29 @@ const http = require('http');
 const { Server } = require('socket.io');
 const admin = require('firebase-admin');
 
-const serviceAccount = require('./firebase-adminsdk.json');
+// --- הלוגיקה החדשה לטעינת הפיירבייס מ-Secret Files ב-Render ---
+let serviceAccount;
+
+try {
+    // מנסה למשוך את הקובץ מתוך תיקיית הסודות של Render
+    serviceAccount = require('/etc/secrets/firebase-adminsdk.json');
+    console.log("✅ Loaded Firebase credentials from Render Secret File (/etc/secrets/)");
+} catch (err) {
+    // אם זה נכשל, אנחנו כנראה מריצים את השרת לוקאלית על המחשב שלך לטסטים
+    try {
+        serviceAccount = require('./firebase-adminsdk.json');
+        console.log("✅ Loaded Firebase credentials from local file");
+    } catch (localErr) {
+        console.error("❌ CRITICAL ERROR: Could not find firebase credential file anywhere!");
+        process.exit(1);
+    }
+}
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
+// ----------------------------------------------------------------
 
 const app = express();
 app.use(cors());
@@ -222,11 +240,9 @@ app.post('/api/ping-group', async (req, res) => {
     }
 });
 
-// --- חדש: הנתיב שמקבל את האזעקות מהמחשב שלך בישראל ---
 app.post('/api/webhook-alert', async (req, res) => {
     const { secret, cities } = req.body;
     
-    // מוודא שרק אתה יכול לשלוח לפה נתונים
     if (secret !== SECRET_WEBHOOK_TOKEN) {
         console.log("⚠️ Unauthorized webhook attempt!");
         return res.status(403).json({ error: 'Unauthorized' });
@@ -279,7 +295,6 @@ app.post('/api/webhook-alert', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-// --------------------------------------------------------
 
 app.get('/api/test-oref', async (req, res) => {
     const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
