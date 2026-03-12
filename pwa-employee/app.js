@@ -175,6 +175,10 @@ function initApp() {
     });
 }
 
+// ------------------------------------------------------------------
+// פתיחת מסך הגדרות וכפתור בית
+// ------------------------------------------------------------------
+
 document.getElementById('btn-settings').addEventListener('click', () => {
     document.getElementById('settings-username-display').innerText = `מחובר כ: ${currentUserName}`;
     tempSettingsCities = [...userCities]; 
@@ -192,6 +196,16 @@ document.getElementById('btn-settings').addEventListener('click', () => {
     }
     
     settingsModal.classList.remove('hidden');
+});
+
+// מאזין לכפתור הבית החדש
+document.getElementById('btn-home').addEventListener('click', () => {
+    // מציג מחדש את כפתורי הדיווח (הירוק והאדום)
+    document.querySelector('.action-buttons').classList.remove('hidden');
+    
+    // מעלים הודעות סטטוס ומסכי שחרור כדי לנקות את התצוגה
+    document.getElementById('status-message').classList.add('hidden');
+    document.getElementById('all-clear-banner').classList.add('hidden');
 });
 
 document.getElementById('btn-enable-push').addEventListener('click', () => { 
