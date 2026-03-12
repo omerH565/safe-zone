@@ -39,20 +39,42 @@ const io = new Server(server, {
 const usersStatus = new Map();
 const userPushTokens = new Map();
 
+// --- מילון המרחבים של פיקוד העורף (ניתן להוסיף עוד בהמשך) ---
 const regionsMap = {
-    "תל אביב - מרכז": "דן",
+    "תל אביב - דרום העיר ויפו": "דן",
     "תל אביב - מזרח": "דן",
-    "תל אביב - דרום": "דן",
+    "תל אביב - מרכז העיר": "דן",
     "תל אביב - עבר הירקון": "דן",
-    "רמת גן": "דן",
-    "גבעתיים": "דן"
+    "רמת גן - מזרח": "דן",
+    "רמת גן - מערב": "דן",
+    "גבעתיים": "דן",
+    "בני ברק": "דן",
+    "חולון": "דן",
+    "בת ים": "דן",
+    "אור יהודה": "דן",
+    "יהוד מונוסון": "דן",
+    "קרית אונו": "דן",
+    "פתח תקווה": "ירקון",
+    "רינתיה": "ירקון",
+    "ראש העין": "ירקון",
+    "אלעד": "ירקון",
+    "הרצליה - מערב": "דן",
+    "הרצליה - מרכז וגליל ים": "דן",
+    "רמת השרון": "דן",
+    "ראשון לציון - מזרח": "השפלה",
+    "ראשון לציון - מערב": "השפלה",
+    "רחובות": "השפלה",
+    "נס ציונה": "השפלה",
+    "לוד": "השפלה",
+    "רמלה": "השפלה"
 };
 
 const SECRET_WEBHOOK_TOKEN = 'omer_safezone_secret_2026';
 
+// פונקציה שממירה רשימת ערים מדויקות לרשימת מרחבים כלליים
 function deriveAlertAreas(cities) {
     if (!cities || !Array.isArray(cities)) return [];
-    const areas = new Set(cities);
+    const areas = new Set();
     cities.forEach(city => {
         if (regionsMap[city]) {
             areas.add(regionsMap[city]);
@@ -88,16 +110,19 @@ io.on('connection', (socket) => {
     socket.on('update_settings', async (data) => {
         const { userId, name, targetCities } = data;
         try {
-            const finalCities = deriveAlertAreas(targetCities || ['תל אביב - מרכז']);
+            const finalCities = targetCities || [];
+            const finalRegions = deriveAlertAreas(finalCities); // גוזרים את המרחבים
+
             await db.collection('users').doc(userId).update({
                 name: name,
-                targetCities: finalCities
+                targetCities: finalCities,
+                targetRegions: finalRegions
             });
             
             if (usersStatus.has(userId)) {
                 usersStatus.get(userId).name = name;
             }
-            console.log(`Settings updated for user ${name}`);
+            console.log(`Settings updated for user ${name}. Regions set to: ${finalRegions.join(', ')}`);
         } catch (err) { console.error('Error updating settings:', err); }
     });
 
@@ -106,15 +131,16 @@ io.on('connection', (socket) => {
         try {
             const userRef = db.collection('users').doc(userId);
             const doc = await userRef.get();
-            const finalCities = deriveAlertAreas(targetCities || ['תל אביב - מרכז']);
+            const finalCities = targetCities || [];
+            const finalRegions = deriveAlertAreas(finalCities);
 
             if (doc.exists) {
                 const data = doc.data();
                 const existingGroups = data.groups || [];
                 const mergedGroups = [...new Set([...existingGroups, ...(groups || [])])];
-                await userRef.update({ name, groups: mergedGroups, targetCities: finalCities });
+                await userRef.update({ name, groups: mergedGroups, targetCities: finalCities, targetRegions: finalRegions });
             } else {
-                await userRef.set({ name, groups: groups || [], targetCities: finalCities });
+                await userRef.set({ name, groups: groups || [], targetCities: finalCities, targetRegions: finalRegions });
             }
 
             if (groups && Array.isArray(groups)) {
@@ -132,7 +158,8 @@ io.on('connection', (socket) => {
         try {
             const userRef = db.collection('users').doc(userId);
             const doc = await userRef.get();
-            const finalCities = deriveAlertAreas(targetCities || ['תל אביב - מרכז']);
+            const finalCities = targetCities || [];
+            const finalRegions = deriveAlertAreas(finalCities);
 
             if (doc.exists) {
                 const existingData = doc.data();
@@ -140,9 +167,9 @@ io.on('connection', (socket) => {
                 if (!existingGroups.includes(groupId)) {
                     existingGroups.push(groupId);
                 }
-                await userRef.update({ name, groups: existingGroups, targetCities: finalCities });
+                await userRef.update({ name, groups: existingGroups, targetCities: finalCities, targetRegions: finalRegions });
             } else {
-                await userRef.set({ name, groups: [groupId], targetCities: finalCities });
+                await userRef.set({ name, groups: [groupId], targetCities: finalCities, targetRegions: finalRegions });
             }
 
             socket.join(groupId);
@@ -238,49 +265,46 @@ app.post('/api/ping-group', async (req, res) => {
     }
 });
 
-// --- נתיב 1: הדלקת האזעקה (Webhook) ---
+// --- נתיב 1: הדלקת האזעקה (חסין למגבלת ה-10 פריטים של פיירבייס!) ---
 app.post('/api/webhook-alert', async (req, res) => {
     const { secret, cities } = req.body;
     
-    if (secret !== SECRET_WEBHOOK_TOKEN) {
-        console.log("⚠️ Unauthorized webhook attempt!");
-        return res.status(403).json({ error: 'Unauthorized' });
-    }
+    if (secret !== SECRET_WEBHOOK_TOKEN) return res.status(403).json({ error: 'Unauthorized' });
+    if (!cities || !Array.isArray(cities)) return res.status(400).json({ error: 'Invalid data' });
 
-    if (!cities || !Array.isArray(cities)) {
-        return res.status(400).json({ error: 'Invalid data' });
-    }
-
-    console.log(`🚨 [WEBHOOK] אזעקה התקבלה מהמחשב בישראל! אזורים: ${cities.join(', ')}`);
+    console.log(`🚨 [WEBHOOK] אזעקה התקבלה! סך הכל ערים: ${cities.length}`);
 
     try {
-        const searchCities = cities.slice(0, 10);
-        const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', searchCities).get();
+        const usersToAlert = new Map(); // אוסף ייחודי של משתמשים
+
+        // חותך את הרשימה לקבוצות של 10 כדי לעקוף את המגבלה של פיירבייס
+        for (let i = 0; i < cities.length; i += 10) {
+            const chunk = cities.slice(i, i + 10);
+            const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', chunk).get();
+            snapshot.forEach(doc => {
+                usersToAlert.set(doc.id, doc.data());
+            });
+        }
         
-        snapshot.forEach(doc => {
-            const userId = doc.id;
-            const userRecord = doc.data();
-            
+        console.log(`נמצאו ${usersToAlert.size} משתמשים להתרעה.`);
+
+        usersToAlert.forEach((userRecord, userId) => {
             usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
             const userGroups = userRecord.groups || [];
             userGroups.forEach(group => {
-                io.to(group).emit('group_member_status', { 
-                    userId: userId, 
-                    name: userRecord.name, 
-                    status: 'pending', 
-                    groupId: group 
-                });
+                io.to(group).emit('group_member_status', { userId, name: userRecord.name, status: 'pending', groupId: group });
             });
             
             io.emit('new_alert_for_user', { userId: userId, cities: cities });
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             if (userPushToken) {
+                const matchedCity = cities.find(c => (userRecord.targetCities || []).includes(c)) || cities[0];
                 const message = {
                     notification: {
                         title: '🚨 אזעקה באזורך!',
-                        body: `התרעה הופעלה באזורים: ${cities.slice(0, 3).join(', ')}. היכנס מיד למרחב מוגן.`
+                        body: `התרעה הופעלה ב: ${matchedCity}. היכנס מיד למרחב מוגן.`
                     },
                     token: userPushToken
                 };
@@ -295,37 +319,35 @@ app.post('/api/webhook-alert', async (req, res) => {
     }
 });
 
-// --- נתיב 2: חזל"ש / ניקוי האזעקה (Webhook) ---
+// --- נתיב 2: חזל"ש (עובד לפי מרחבים במקום ערים) ---
 app.post('/api/webhook-clear', async (req, res) => {
-    const { secret, cities } = req.body;
+    const { secret, cities } = req.body; // במקרה של חזל"ש, המשתנה 'cities' מכיל בפועל את המרחבים (למשל 'דן', 'ירקון')
     
     if (secret !== SECRET_WEBHOOK_TOKEN) return res.status(403).json({ error: 'Unauthorized' });
     if (!cities || !Array.isArray(cities)) return res.status(400).json({ error: 'Invalid data' });
 
-    console.log(`🟢 [WEBHOOK] חזל"ש התקבל! משחרר את האזורים: ${cities.join(', ')}`);
+    console.log(`🟢 [WEBHOOK] חזל"ש התקבל! משחרר את המרחבים: ${cities.join(', ')}`);
 
     try {
-        const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', cities).get();
+        const usersToClear = new Map();
+
+        // מחפש משתמשים שה-targetRegions שלהם תואם לחזל"ש (בקבוצות של 10)
+        for (let i = 0; i < cities.length; i += 10) {
+            const chunk = cities.slice(i, i + 10);
+            const snapshot = await db.collection('users').where('targetRegions', 'array-contains-any', chunk).get();
+            snapshot.forEach(doc => {
+                usersToClear.set(doc.id, doc.data());
+            });
+        }
         
-        snapshot.forEach(doc => {
-            const userId = doc.id;
-            const userRecord = doc.data();
-            
-            // מאפס את הסטטוס בזיכרון השרת לאפור (pending)
+        usersToClear.forEach((userRecord, userId) => {
             usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
-            // משדר לכל הקבוצות של המשתמש שהסטטוס שלו חזר לאפור
             const userGroups = userRecord.groups || [];
             userGroups.forEach(group => {
-                io.to(group).emit('group_member_status', { 
-                    userId: userId, 
-                    name: userRecord.name, 
-                    status: 'pending', 
-                    groupId: group 
-                });
+                io.to(group).emit('group_member_status', { userId, name: userRecord.name, status: 'pending', groupId: group });
             });
             
-            // משדר לאפליקציה של המשתמש לנקות את המסך
             io.emit('clear_alert_for_user', { userId: userId });
         });
 
@@ -353,7 +375,7 @@ app.get('/api/test-oref', async (req, res) => {
 });
 
 app.get('/api/simulate-alert', async (req, res) => {
-    const city = req.query.city || 'תל אביב - מרכז';
+    const city = req.query.city || 'תל אביב - מרכז העיר';
     try {
         const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', [city]).get();
         snapshot.forEach(doc => {
