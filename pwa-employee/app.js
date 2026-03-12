@@ -380,12 +380,19 @@ socket.on('new_alert_for_user', (data) => {
         document.getElementById('ping-banner').classList.add('hidden');
         document.getElementById('all-clear-banner').classList.add('hidden');
         
-        // --- מחזירים את ההבהוב בכל אזעקה חדשה שמגיעה ---
         document.getElementById('alert-banner').style.animation = 'pulse 1.5s infinite';
         
-        const currentStatusMsg = document.getElementById('status-message');
-        if (currentStatusMsg.classList.contains('hidden')) {
+        // --- התיקון הכירורגי: סנכרון תצוגה מול מצב השרת ---
+        const userStatus = data.status || 'pending'; 
+        
+        if (userStatus === 'pending') {
+            // המשתמש טרם דיווח, מציגים כפתורים
             document.querySelector('.action-buttons').classList.remove('hidden');
+            document.getElementById('status-message').classList.add('hidden');
+        } else {
+            // המשתמש כבר דיווח קודם לכן (מגן 12 דקות), מסתירים כפתורים
+            document.querySelector('.action-buttons').classList.add('hidden');
+            document.getElementById('status-message').classList.remove('hidden');
         }
 
         if (data.isEarlyWarning) {

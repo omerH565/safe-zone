@@ -209,18 +209,17 @@ io.on('connection', (socket) => {
         const lastAlertData = userLastAlert.get(userId);
         const now = Date.now();
         
-        // אם למשתמש יש אזעקה אקטיבית מה-12 דקות האחרונות
         if (lastAlertData && (now - lastAlertData.time < 12 * 60 * 1000)) {
-            console.log(`[State Recovery] Resending active alert to ${userId} after Push click`);
-            
             const isEarlyWarning = lastAlertData.type === 'warning';
+            // בודק מה הסטטוס העדכני שלך בשרת
+            const currentStatus = usersStatus.get(userId)?.status || 'pending'; 
             
-            // משדרים לו מחדש את האזעקה עם זמן ההתחלה המקורי!
             socket.emit('new_alert_for_user', { 
                 userId: userId, 
-                cities: ['אזורך'], // המערכת לא עושה בזה שימוש כרגע, העיקר שיש ערך
+                cities: ['אזורך'], 
                 startTime: lastAlertData.time, 
-                isEarlyWarning: isEarlyWarning 
+                isEarlyWarning: isEarlyWarning,
+                status: currentStatus // הזרקת הסטטוס
             });
         }
     });
@@ -357,7 +356,8 @@ app.post('/api/webhook-alert', async (req, res) => {
                 userId: userId, 
                 cities: cities, 
                 startTime: now, 
-                isEarlyWarning: isEarlyWarning 
+                isEarlyWarning: isEarlyWarning, 
+                status: currentStatus // הזרקת הסטטוס
             });
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
