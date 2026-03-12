@@ -10,22 +10,21 @@ let serviceAccount;
 
 try {
     serviceAccount = require('/etc/secrets/firebase-adminsdk.json');
-    console.log("✅ Loaded Firebase credentials from Render Secret File (/etc/secrets/)");
+    console.log("✅ Loaded Firebase credentials from Render Secret File");
 } catch (err) {
     try {
         serviceAccount = require('./firebase-adminsdk.json');
-        console.log("✅ Loaded Firebase credentials from local file");
+        console.log("✅ Loaded Firebase credentials locally");
     } catch (localErr) {
-        console.error("❌ CRITICAL ERROR: Could not find firebase credential file anywhere!");
+        console.error("❌ CRITICAL ERROR: No firebase credentials!");
         process.exit(1);
     }
 }
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+    credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
-// ----------------------------------------------------------------
 
 const app = express();
 app.use(cors());
@@ -39,7 +38,9 @@ const io = new Server(server, {
 const usersStatus = new Map();
 const userPushTokens = new Map();
 
-// --- מילון המרחבים של פיקוד העורף (ניתן להוסיף עוד בהמשך) ---
+// מגן 12 דקות שמחזיק גם את סוג האירוע (התרעה מול אזעקה) כדי לדעת מתי לשדרג
+const userLastAlert = new Map(); 
+
 const regionsMap = {
     "תל אביב - דרום העיר ויפו": "דן",
     "תל אביב - מזרח": "דן",
@@ -71,7 +72,6 @@ const regionsMap = {
 
 const SECRET_WEBHOOK_TOKEN = 'omer_safezone_secret_2026';
 
-// פונקציה שממירה רשימת ערים מדויקות לרשימת מרחבים כלליים
 function deriveAlertAreas(cities) {
     if (!cities || !Array.isArray(cities)) return [];
     const areas = new Set();
@@ -88,19 +88,17 @@ async function sendGroupStateToSocket(socket, groupId) {
         const snapshot = await db.collection('users').where('groups', 'array-contains', groupId).get();
         snapshot.forEach(doc => {
             const uid = doc.id;
-            const record = doc.data();
-            const statusData = usersStatus.get(uid);
-            const currentStatus = statusData ? statusData.status : 'pending';
+            const currentStatus = usersStatus.has(uid) ? usersStatus.get(uid).status : 'pending';
             
             socket.emit('group_member_status', {
                 userId: uid,
-                name: record.name,
+                name: doc.data().name,
                 status: currentStatus,
                 groupId: groupId
             });
         });
-    } catch (error) {
-        console.error("Error fetching group state:", error);
+    } catch (err) {
+        console.error("Error fetching group state:", err);
     }
 }
 
@@ -110,20 +108,19 @@ io.on('connection', (socket) => {
     socket.on('update_settings', async (data) => {
         const { userId, name, targetCities } = data;
         try {
-            const finalCities = targetCities || [];
-            const finalRegions = deriveAlertAreas(finalCities); // גוזרים את המרחבים
-
+            const finalRegions = deriveAlertAreas(targetCities || []);
             await db.collection('users').doc(userId).update({
                 name: name,
-                targetCities: finalCities,
+                targetCities: targetCities,
                 targetRegions: finalRegions
             });
             
             if (usersStatus.has(userId)) {
                 usersStatus.get(userId).name = name;
             }
-            console.log(`Settings updated for user ${name}. Regions set to: ${finalRegions.join(', ')}`);
-        } catch (err) { console.error('Error updating settings:', err); }
+        } catch (err) {
+            console.error('Error updating settings:', err);
+        }
     });
 
     socket.on('join_groups', async (userData) => {
@@ -131,26 +128,35 @@ io.on('connection', (socket) => {
         try {
             const userRef = db.collection('users').doc(userId);
             const doc = await userRef.get();
-            const finalCities = targetCities || [];
-            const finalRegions = deriveAlertAreas(finalCities);
+            const finalRegions = deriveAlertAreas(targetCities || []);
 
             if (doc.exists) {
-                const data = doc.data();
-                const existingGroups = data.groups || [];
+                const existingGroups = doc.data().groups || [];
                 const mergedGroups = [...new Set([...existingGroups, ...(groups || [])])];
-                await userRef.update({ name, groups: mergedGroups, targetCities: finalCities, targetRegions: finalRegions });
+                await userRef.update({
+                    name: name,
+                    groups: mergedGroups,
+                    targetCities: targetCities,
+                    targetRegions: finalRegions
+                });
             } else {
-                await userRef.set({ name, groups: groups || [], targetCities: finalCities, targetRegions: finalRegions });
+                await userRef.set({
+                    name: name,
+                    groups: groups || [],
+                    targetCities: targetCities,
+                    targetRegions: finalRegions
+                });
             }
 
             if (groups && Array.isArray(groups)) {
                 groups.forEach(group => {
                     socket.join(group);
-                    console.log(`User ${name} joined group: ${group}`);
                     sendGroupStateToSocket(socket, group);
                 });
             }
-        } catch (err) { console.error("Error in join_groups:", err); }
+        } catch (err) {
+            console.error("Error in join_groups:", err);
+        }
     });
 
     socket.on('join_via_link', async (data) => {
@@ -158,32 +164,41 @@ io.on('connection', (socket) => {
         try {
             const userRef = db.collection('users').doc(userId);
             const doc = await userRef.get();
-            const finalCities = targetCities || [];
-            const finalRegions = deriveAlertAreas(finalCities);
+            const finalRegions = deriveAlertAreas(targetCities || []);
 
             if (doc.exists) {
-                const existingData = doc.data();
-                const existingGroups = existingData.groups || [];
+                const existingGroups = doc.data().groups || [];
                 if (!existingGroups.includes(groupId)) {
                     existingGroups.push(groupId);
                 }
-                await userRef.update({ name, groups: existingGroups, targetCities: finalCities, targetRegions: finalRegions });
+                await userRef.update({
+                    name: name,
+                    groups: existingGroups,
+                    targetCities: targetCities,
+                    targetRegions: finalRegions
+                });
             } else {
-                await userRef.set({ name, groups: [groupId], targetCities: finalCities, targetRegions: finalRegions });
+                await userRef.set({
+                    name: name,
+                    groups: [groupId],
+                    targetCities: targetCities,
+                    targetRegions: finalRegions
+                });
             }
 
             socket.join(groupId);
-            console.log(`User ${name} (${userId}) dynamically joined group: ${groupId}`);
             
             io.to(groupId).emit('group_member_status', { 
-                userId, 
-                name, 
+                userId: userId, 
+                name: name, 
                 status: 'pending', 
-                groupId 
+                groupId: groupId 
             });
 
             sendGroupStateToSocket(socket, groupId);
-        } catch (err) { console.error("Error in join_via_link:", err); }
+        } catch (err) {
+            console.error("Error in join_via_link:", err);
+        }
     });
 });
 
@@ -196,7 +211,6 @@ app.get('/api/user/:userId', async (req, res) => {
             res.json({ success: true, data: null });
         }
     } catch (err) {
-        console.error("Error fetching user:", err);
         res.status(500).json({ error: 'Database error' });
     }
 });
@@ -205,12 +219,10 @@ app.post('/api/register-push', async (req, res) => {
     const { userId, token } = req.body;
     if (userId && token) {
         userPushTokens.set(userId, token);
-        console.log(`Push token registered in memory for user ${userId}`);
         try {
             await db.collection('users').doc(userId).set({ pushToken: token }, { merge: true });
-            console.log(`Push token saved to Firestore for user ${userId}`);
         } catch (error) {
-            console.error("Error saving token to DB:", error);
+            console.error("Error saving token:", error);
         }
         res.status(200).send({ success: true });
     } else {
@@ -245,39 +257,34 @@ app.post('/api/ping-group', async (req, res) => {
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             if (userPushToken) {
-                const message = {
+                admin.messaging().send({
                     notification: {
                         title: `🔔 בדיקת נוכחות: קבוצת ${groupId}`,
                         body: `${senderName} מבקש לדעת שכולם בסדר. היכנסו לעדכן סטטוס!`
                     },
                     token: userPushToken
-                };
-                admin.messaging().send(message)
-                    .then(r => console.log(`Ping Push sent to ${userRecord.name}`))
-                    .catch(err => console.error('Error sending Ping Push:', err));
+                }).catch(err => console.error(err));
             }
         });
 
         res.json({ success: true });
     } catch(e) {
-        console.error("Error pinging group:", e);
         res.status(500).json({error: e.message});
     }
 });
 
-// --- נתיב 1: הדלקת האזעקה (חסין למגבלת ה-10 פריטים של פיירבייס!) ---
 app.post('/api/webhook-alert', async (req, res) => {
-    const { secret, cities } = req.body;
+    const { secret, cities, isEarlyWarning } = req.body;
     
     if (secret !== SECRET_WEBHOOK_TOKEN) return res.status(403).json({ error: 'Unauthorized' });
     if (!cities || !Array.isArray(cities)) return res.status(400).json({ error: 'Invalid data' });
 
-    console.log(`🚨 [WEBHOOK] אזעקה התקבלה! סך הכל ערים: ${cities.length}`);
+    const alertType = isEarlyWarning ? 'warning' : 'siren';
+    const now = Date.now();
 
     try {
-        const usersToAlert = new Map(); // אוסף ייחודי של משתמשים
-
-        // חותך את הרשימה לקבוצות של 10 כדי לעקוף את המגבלה של פיירבייס
+        const usersToAlert = new Map();
+        
         for (let i = 0; i < cities.length; i += 10) {
             const chunk = cities.slice(i, i + 10);
             const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', chunk).get();
@@ -286,52 +293,80 @@ app.post('/api/webhook-alert', async (req, res) => {
             });
         }
         
-        console.log(`נמצאו ${usersToAlert.size} משתמשים להתרעה.`);
-
         usersToAlert.forEach((userRecord, userId) => {
-            usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
+            const lastAlertData = userLastAlert.get(userId) || { time: 0, type: null };
+            const timeSinceLast = now - lastAlertData.time;
+            
+            let shouldAlert = false;
+            let shouldResetStatus = false;
+            
+            // לוגיקת מגן 12 דקות ושדרוג
+            if (timeSinceLast >= 12 * 60 * 1000) {
+                // אירוע חדש לחלוטין
+                shouldAlert = true;
+                shouldResetStatus = true;
+            } else if (lastAlertData.type === 'warning' && alertType === 'siren') {
+                // שדרוג מהתרעה לאזעקה ממשית
+                shouldAlert = true;
+                shouldResetStatus = false; // שומרים על הסטטוס אם הוא כבר התעדכן
+            } else {
+                console.log(`[Debounce] Skipping alert for ${userRecord.name}`);
+                return;
+            }
+
+            userLastAlert.set(userId, { time: now, type: alertType });
+            
+            if (shouldResetStatus) {
+                usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
+            }
+
+            const currentStatus = usersStatus.get(userId)?.status || 'pending';
             
             const userGroups = userRecord.groups || [];
             userGroups.forEach(group => {
-                io.to(group).emit('group_member_status', { userId, name: userRecord.name, status: 'pending', groupId: group });
+                io.to(group).emit('group_member_status', { 
+                    userId: userId, 
+                    name: userRecord.name, 
+                    status: currentStatus, 
+                    groupId: group 
+                });
             });
             
-            io.emit('new_alert_for_user', { userId: userId, cities: cities });
+            io.emit('new_alert_for_user', { 
+                userId: userId, 
+                cities: cities, 
+                startTime: now, 
+                isEarlyWarning: isEarlyWarning 
+            });
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
-            if (userPushToken) {
-                const matchedCity = cities.find(c => (userRecord.targetCities || []).includes(c)) || cities[0];
-                const message = {
-                    notification: {
-                        title: '🚨 אזעקה באזורך!',
-                        body: `התרעה הופעלה ב: ${matchedCity}. היכנס מיד למרחב מוגן.`
-                    },
-                    token: userPushToken
-                };
-                admin.messaging().send(message).catch(err => console.error(err));
+            if (userPushToken && currentStatus !== 'protected') {
+                const title = isEarlyWarning ? '⚠️ התרעה מקדימה באזורך' : '🚨 אזעקה באזורך!';
+                admin.messaging().send({ 
+                    notification: { 
+                        title: title, 
+                        body: `היכנסו למרחב מוגן. אזור: ${cities[0]}` 
+                    }, 
+                    token: userPushToken 
+                }).catch(err => console.error(err));
             }
         });
 
-        res.json({ success: true, message: 'Alert processed successfully' });
+        res.json({ success: true });
     } catch (error) {
-        console.error("Error processing webhook alert:", error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error("Error processing alert:", error);
+        res.status(500).json({ error: 'Server Error' });
     }
 });
 
-// --- נתיב 2: חזל"ש (עובד לפי מרחבים במקום ערים) ---
 app.post('/api/webhook-clear', async (req, res) => {
-    const { secret, cities } = req.body; // במקרה של חזל"ש, המשתנה 'cities' מכיל בפועל את המרחבים (למשל 'דן', 'ירקון')
+    const { secret, cities } = req.body; 
     
     if (secret !== SECRET_WEBHOOK_TOKEN) return res.status(403).json({ error: 'Unauthorized' });
-    if (!cities || !Array.isArray(cities)) return res.status(400).json({ error: 'Invalid data' });
-
-    console.log(`🟢 [WEBHOOK] חזל"ש התקבל! משחרר את המרחבים: ${cities.join(', ')}`);
 
     try {
         const usersToClear = new Map();
-
-        // מחפש משתמשים שה-targetRegions שלהם תואם לחזל"ש (בקבוצות של 10)
+        
         for (let i = 0; i < cities.length; i += 10) {
             const chunk = cities.slice(i, i + 10);
             const snapshot = await db.collection('users').where('targetRegions', 'array-contains-any', chunk).get();
@@ -341,91 +376,80 @@ app.post('/api/webhook-clear', async (req, res) => {
         }
         
         usersToClear.forEach((userRecord, userId) => {
+            userLastAlert.delete(userId);
             usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
             const userGroups = userRecord.groups || [];
             userGroups.forEach(group => {
-                io.to(group).emit('group_member_status', { userId, name: userRecord.name, status: 'pending', groupId: group });
+                io.to(group).emit('group_member_status', { 
+                    userId: userId, 
+                    name: userRecord.name, 
+                    status: 'pending', 
+                    groupId: group 
+                });
             });
             
             io.emit('clear_alert_for_user', { userId: userId });
+
+            const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
+            if (userPushToken) {
+                admin.messaging().send({ 
+                    notification: { 
+                        title: '✅ סיום אירוע', 
+                        body: 'שמחים שאתם בסדר. ניתן לצאת.' 
+                    }, 
+                    token: userPushToken 
+                }).catch(err => console.error(err));
+            }
         });
-
-        res.json({ success: true, message: 'All Clear processed successfully' });
+        
+        res.json({ success: true });
     } catch (error) {
-        console.error("Error processing all-clear:", error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-app.get('/api/test-oref', async (req, res) => {
-    const OREF_API_URL = 'https://www.oref.org.il/WarningMessages/alert/alerts.json';
-    const OREF_HEADERS = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Referer': 'https://www.oref.org.il/',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Content-Type': 'application/json'
-    };
-    try {
-        const response = await axios.get(OREF_API_URL, { headers: OREF_HEADERS, timeout: 5000 });
-        res.json({ success: true, status: response.status, data: response.data, message: "✅ Connected to Oref API!" });
-    } catch (error) {
-        res.json({ success: false, status: error.response ? error.response.status : 'No Response', message: "❌ Failed." });
+        console.error("Error processing clear:", error);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
 app.get('/api/simulate-alert', async (req, res) => {
     const city = req.query.city || 'תל אביב - מרכז העיר';
+    
     try {
-        const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', [city]).get();
-        snapshot.forEach(doc => {
-            const userId = doc.id;
-            const userRecord = doc.data();
-            
-            usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
-            
-            (userRecord.groups || []).forEach(group => {
-                io.to(group).emit('group_member_status', { userId, name: userRecord.name, status: 'pending', groupId: group });
-            });
-            
-            io.emit('new_alert_for_user', { userId, cities: [city] });
-
-            const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
-            if (userPushToken) {
-                admin.messaging().send({
-                    notification: { title: '🚨 אזעקה באזורך (סימולציה)!', body: `התרעה: ${city}` },
-                    token: userPushToken
-                }).catch(err => console.error(err));
-            }
+        await axios.post(`http://localhost:${process.env.PORT || 3000}/api/webhook-alert`, {
+            secret: SECRET_WEBHOOK_TOKEN, 
+            cities: [city], 
+            isEarlyWarning: false
         });
         res.json({ success: true });
-    } catch (error) { res.status(500).json({ error: error.message }); }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.post('/api/status', async (req, res) => {
     const { userId, status } = req.body;
-    if (!userId || !status) return res.status(400).json({ error: 'Missing params' });
-
+    
     try {
         const doc = await db.collection('users').doc(userId).get();
         const userName = doc.exists ? doc.data().name : 'משתמש לא ידוע';
+        
+        usersStatus.set(userId, { name: userName, status: status, time: new Date() });
+        io.emit('status_update', { userId: userId, name: userName, status: status });
+        
         const userGroups = doc.exists ? (doc.data().groups || []) : [];
-
-        usersStatus.set(userId, { name: userName, status, time: new Date() });
-        io.emit('status_update', { userId, name: userName, status });
-
         userGroups.forEach(group => {
-            io.to(group).emit('group_member_status', { userId, name: userName, status, groupId: group });
+            io.to(group).emit('group_member_status', { 
+                userId: userId, 
+                name: userName, 
+                status: status, 
+                groupId: group 
+            });
         });
+        
         res.status(200).json({ success: true });
-    } catch (err) { res.status(500).json({ error: 'Database error' }); }
-});
-
-app.get('/api/all-status', (req, res) => {
-    res.json(Array.from(usersStatus.entries()).map(([userId, data]) => ({ userId, ...data })));
+    } catch (err) {
+        res.status(500).json({ error: 'DB error' });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`🚀 Server is running on port ${PORT}`));
