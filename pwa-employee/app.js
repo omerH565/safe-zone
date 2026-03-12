@@ -27,6 +27,10 @@ let userGroups = JSON.parse(localStorage.getItem('safeZone_groups') || '[]');
 let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '[]');
 let currentTimer; 
 
+function isRunningAsPWA() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
 // משתנים זמניים למסכי ההגדרות
 let tempOnboardingCities = [];
 let tempSettingsCities = [];
@@ -147,7 +151,7 @@ function initApp() {
         }
     });
 
-    // כפתור הסיום במסך ההתחלה
+ // כפתור הסיום במסך ההתחלה
     document.getElementById('btn-start').addEventListener('click', () => {
         if (tempOnboardingCities.length === 0) {
             alert('אנא הוסף לפחות אזור התרעה אחד (למשל: תל אביב, רינתיה)');
@@ -161,21 +165,41 @@ function initApp() {
         
         if (joinGroupId) handleJoinGroup(joinGroupId);
         connectToServer();
-        requestPushPermission();
+        
+        // --- זה התיקון של סעיף ב' ---
+        // בודק אם אנחנו באפליקציה המותקנת (PWA) ואם אין עדיין אישור התראות
+        if (isRunningAsPWA() && Notification.permission !== 'granted') {
+            requestPushPermission();
+        }
+        // ------------------------------
     });
 }
 
 // פתיחת מסך הגדרות
 document.getElementById('btn-settings').addEventListener('click', () => {
     document.getElementById('settings-username-display').innerText = `מחובר כ: ${currentUserName}`;
-    tempSettingsCities = [...userCities]; // העתקת המערך הנוכחי למערך זמני
+    tempSettingsCities = [...userCities]; 
     
     renderCityTags(tempSettingsCities, 'settings-city-tags', (idx) => {
         tempSettingsCities.splice(idx, 1);
         renderCityTags(tempSettingsCities, 'settings-city-tags', arguments.callee);
     });
+
+    // הלוגיקה החדשה של כפתור הפוש
+    const pushBtn = document.getElementById('btn-enable-push');
+    if (isRunningAsPWA() && Notification.permission !== 'granted') {
+        pushBtn.classList.remove('hidden');
+    } else {
+        pushBtn.classList.add('hidden');
+    }
     
     settingsModal.classList.remove('hidden');
+});
+
+// מאזין לכפתור הפוש החדש
+document.getElementById('btn-enable-push').addEventListener('click', () => {
+    requestPushPermission();
+    document.getElementById('btn-enable-push').classList.add('hidden'); // מסתיר אחרי לחיצה
 });
 
 // הוספת עיר במסך ההגדרות
@@ -424,4 +448,19 @@ function startTimer(seconds) {
     }, 1000);
 }
 
+socket.on('clear_alert_for_user', (data) => {
+    if(data.userId === currentUserId) {
+        // מעלים את כל מסכי האזעקה והסטטוסים
+        document.getElementById('alert-banner').classList.add('hidden');
+        document.getElementById('ping-banner').classList.add('hidden');
+        document.querySelector('.action-buttons').classList.add('hidden');
+        document.getElementById('status-message').classList.add('hidden');
+        document.getElementById('btn-arrived').classList.add('hidden');
+        
+        // עוצר את הטיימר
+        if (currentTimer) clearInterval(currentTimer);
+        
+        console.log("🟢 התקבל חזל'ש מהשרת. המסך נוקה.");
+    }
+});
 initApp();

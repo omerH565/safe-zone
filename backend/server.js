@@ -5,15 +5,13 @@ const http = require('http');
 const { Server } = require('socket.io');
 const admin = require('firebase-admin');
 
-// --- הלוגיקה החדשה לטעינת הפיירבייס מ-Secret Files ב-Render ---
+// --- הלוגיקה לטעינת הפיירבייס מ-Secret Files ב-Render ---
 let serviceAccount;
 
 try {
-    // מנסה למשוך את הקובץ מתוך תיקיית הסודות של Render
     serviceAccount = require('/etc/secrets/firebase-adminsdk.json');
     console.log("✅ Loaded Firebase credentials from Render Secret File (/etc/secrets/)");
 } catch (err) {
-    // אם זה נכשל, אנחנו כנראה מריצים את השרת לוקאלית על המחשב שלך לטסטים
     try {
         serviceAccount = require('./firebase-adminsdk.json');
         console.log("✅ Loaded Firebase credentials from local file");
@@ -240,6 +238,7 @@ app.post('/api/ping-group', async (req, res) => {
     }
 });
 
+// --- נתיב 1: הדלקת האזעקה (Webhook) ---
 app.post('/api/webhook-alert', async (req, res) => {
     const { secret, cities } = req.body;
     
@@ -292,6 +291,47 @@ app.post('/api/webhook-alert', async (req, res) => {
         res.json({ success: true, message: 'Alert processed successfully' });
     } catch (error) {
         console.error("Error processing webhook alert:", error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// --- נתיב 2: חזל"ש / ניקוי האזעקה (Webhook) ---
+app.post('/api/webhook-clear', async (req, res) => {
+    const { secret, cities } = req.body;
+    
+    if (secret !== SECRET_WEBHOOK_TOKEN) return res.status(403).json({ error: 'Unauthorized' });
+    if (!cities || !Array.isArray(cities)) return res.status(400).json({ error: 'Invalid data' });
+
+    console.log(`🟢 [WEBHOOK] חזל"ש התקבל! משחרר את האזורים: ${cities.join(', ')}`);
+
+    try {
+        const snapshot = await db.collection('users').where('targetCities', 'array-contains-any', cities).get();
+        
+        snapshot.forEach(doc => {
+            const userId = doc.id;
+            const userRecord = doc.data();
+            
+            // מאפס את הסטטוס בזיכרון השרת לאפור (pending)
+            usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
+            
+            // משדר לכל הקבוצות של המשתמש שהסטטוס שלו חזר לאפור
+            const userGroups = userRecord.groups || [];
+            userGroups.forEach(group => {
+                io.to(group).emit('group_member_status', { 
+                    userId: userId, 
+                    name: userRecord.name, 
+                    status: 'pending', 
+                    groupId: group 
+                });
+            });
+            
+            // משדר לאפליקציה של המשתמש לנקות את המסך
+            io.emit('clear_alert_for_user', { userId: userId });
+        });
+
+        res.json({ success: true, message: 'All Clear processed successfully' });
+    } catch (error) {
+        console.error("Error processing all-clear:", error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
