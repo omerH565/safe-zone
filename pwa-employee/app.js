@@ -457,6 +457,7 @@ socket.on('clear_alert_for_user', (data) => {
         document.getElementById('status-message').classList.add('hidden');
         document.getElementById('btn-arrived').classList.add('hidden');
         
+        document.querySelector('.action-buttons').classList.remove('hidden');
         // עוצר את הטיימר
         if (currentTimer) clearInterval(currentTimer);
         
