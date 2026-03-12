@@ -76,6 +76,12 @@ function initApp() {
     const urlParams = new URLSearchParams(window.location.search);
     const joinGroupId = urlParams.get('join');
 
+    // העלמת באנר ההתקנה אם המשתמש כבר נמצא באפליקציה המותקנת
+    if (isRunningAsPWA()) {
+        const installBanner = document.getElementById('pwa-install-banner');
+        if (installBanner) installBanner.style.display = 'none';
+    }
+    
     auth.onAuthStateChanged(async user => {
         if (user) {
             currentUserId = user.uid;
