@@ -27,6 +27,7 @@ let userGroups = JSON.parse(localStorage.getItem('safeZone_groups') || '[]');
 let userCities = JSON.parse(localStorage.getItem('safeZone_cities') || '[]');
 let currentTimer; 
 let stopwatchInterval;
+let shelterInterval; // שעון העצר החדש לשהייה בממ"ד
 
 function isRunningAsPWA() {
     return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -175,10 +176,6 @@ function initApp() {
     });
 }
 
-// ------------------------------------------------------------------
-// פתיחת מסך הגדרות וכפתור בית
-// ------------------------------------------------------------------
-
 document.getElementById('btn-settings').addEventListener('click', () => {
     document.getElementById('settings-username-display').innerText = `מחובר כ: ${currentUserName}`;
     tempSettingsCities = [...userCities]; 
@@ -198,12 +195,8 @@ document.getElementById('btn-settings').addEventListener('click', () => {
     settingsModal.classList.remove('hidden');
 });
 
-// מאזין לכפתור הבית החדש
 document.getElementById('btn-home').addEventListener('click', () => {
-    // מציג מחדש את כפתורי הדיווח (הירוק והאדום)
     document.querySelector('.action-buttons').classList.remove('hidden');
-    
-    // מעלים הודעות סטטוס ומסכי שחרור כדי לנקות את התצוגה
     document.getElementById('status-message').classList.add('hidden');
     document.getElementById('all-clear-banner').classList.add('hidden');
 });
@@ -386,7 +379,6 @@ socket.on('new_alert_for_user', (data) => {
         document.getElementById('ping-banner').classList.add('hidden');
         document.getElementById('all-clear-banner').classList.add('hidden');
         
-        // אם המשתמש כבר סימן שהוא בטוח לא נפתח מחדש את הכפתורים
         const currentStatusMsg = document.getElementById('status-message');
         if (currentStatusMsg.classList.contains('hidden')) {
             document.querySelector('.action-buttons').classList.remove('hidden');
@@ -417,6 +409,7 @@ socket.on('ping_alert_for_user', (data) => {
         
         if (currentTimer) clearInterval(currentTimer);
         if (stopwatchInterval) clearInterval(stopwatchInterval);
+        if (shelterInterval) clearInterval(shelterInterval);
     }
 });
 
@@ -455,13 +448,43 @@ async function reportStatus(status) {
     }
 }
 
-// טיימר שיורד מ-90
+// פונקציה לעדכון תצוגת השהייה בממ"ד
+function updateShelterDisplay(startTimeMs, displayElement) {
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startTimeMs) / 1000));
+    const mins = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
+    const secs = String(elapsedSeconds % 60).padStart(2, '0');
+    displayElement.innerText = `זמן במרחב המוגן: ${mins}:${secs}`;
+}
+
+// הפעלת שעון העצר לשהייה בממ"ד (אחרי סיום ה-90 שניות)
+function startShelterStopwatch(shelterStartTimeMs) {
+    if (shelterInterval) clearInterval(shelterInterval);
+    const timerDisplay = document.getElementById('timer');
+    
+    // עדכון ראשוני מיידי
+    updateShelterDisplay(shelterStartTimeMs, timerDisplay);
+    
+    shelterInterval = setInterval(() => {
+        updateShelterDisplay(shelterStartTimeMs, timerDisplay);
+    }, 1000);
+}
+
+// טיימר יורד מ-90 שניות ואז עובר אוטומטית לשעון שהייה
 function startTimer(durationSeconds, startTimeMs) {
     if (currentTimer) clearInterval(currentTimer); 
     if (stopwatchInterval) clearInterval(stopwatchInterval);
+    if (shelterInterval) clearInterval(shelterInterval);
     
     const timerDisplay = document.getElementById('timer');
     const startTimestamp = startTimeMs || Date.now();
+    
+    // בדיקה מיידית למקרה שהמשתמש נכנס אחרי שכבר עברו 90 שניות
+    const initialElapsed = Math.floor((Date.now() - startTimestamp) / 1000);
+    if (durationSeconds - initialElapsed <= 0) {
+        const exactShelterStartTime = startTimestamp + (durationSeconds * 1000);
+        startShelterStopwatch(exactShelterStartTime);
+        return; // עוצר את יצירת הטיימר הרגיל
+    }
     
     currentTimer = setInterval(() => {
         const elapsedSeconds = Math.floor((Date.now() - startTimestamp) / 1000);
@@ -469,17 +492,20 @@ function startTimer(durationSeconds, startTimeMs) {
         
         if (timeLeft <= 0) {
             clearInterval(currentTimer); 
-            timerDisplay.innerText = "הישארו במרחב המוגן!";
+            // מחשב את הרגע המדויק שבו הסתיימו ה-90 שניות ומתחיל ממנו את שעון השהייה
+            const exactShelterStartTime = startTimestamp + (durationSeconds * 1000);
+            startShelterStopwatch(exactShelterStartTime);
         } else { 
             timerDisplay.innerText = `זמן להתגוננות: ${timeLeft} שניות`; 
         }
     }, 1000);
 }
 
-// שעון עצר שעולה מאפס
+// שעון עצר שעולה מאפס (עבור התרעות מקדימות בלבד)
 function startStopwatch(startTimeMs) {
     if (currentTimer) clearInterval(currentTimer);
     if (stopwatchInterval) clearInterval(stopwatchInterval);
+    if (shelterInterval) clearInterval(shelterInterval);
     
     const timerDisplay = document.getElementById('timer');
     const startTimestamp = startTimeMs || Date.now();
@@ -502,6 +528,7 @@ socket.on('clear_alert_for_user', (data) => {
         
         if (currentTimer) clearInterval(currentTimer);
         if (stopwatchInterval) clearInterval(stopwatchInterval);
+        if (shelterInterval) clearInterval(shelterInterval);
     }
 });
 

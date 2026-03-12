@@ -300,15 +300,12 @@ app.post('/api/webhook-alert', async (req, res) => {
             let shouldAlert = false;
             let shouldResetStatus = false;
             
-            // לוגיקת מגן 12 דקות ושדרוג
             if (timeSinceLast >= 12 * 60 * 1000) {
-                // אירוע חדש לחלוטין
                 shouldAlert = true;
                 shouldResetStatus = true;
             } else if (lastAlertData.type === 'warning' && alertType === 'siren') {
-                // שדרוג מהתרעה לאזעקה ממשית
                 shouldAlert = true;
-                shouldResetStatus = false; // שומרים על הסטטוס אם הוא כבר התעדכן
+                shouldResetStatus = false; 
             } else {
                 console.log(`[Debounce] Skipping alert for ${userRecord.name}`);
                 return;
@@ -376,7 +373,14 @@ app.post('/api/webhook-clear', async (req, res) => {
         }
         
         usersToClear.forEach((userRecord, userId) => {
+            // --- התיקון למניעת ספאם חזל"ש: שולחים פוש רק למי שהיה תחת אזעקה פעילה ---
+            if (!userLastAlert.has(userId)) {
+                return; // המשתמש לא תחת אזעקה פעילה במערכת, מדלגים עליו
+            }
+
+            // מוחקים מהזיכרון כדי שהחזל"ש הבא (אם יגיע בטעות) יסונן
             userLastAlert.delete(userId);
+            
             usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
             const userGroups = userRecord.groups || [];
@@ -396,7 +400,7 @@ app.post('/api/webhook-clear', async (req, res) => {
                 admin.messaging().send({ 
                     notification: { 
                         title: '✅ סיום אירוע', 
-                        body: 'שמחים שאתם בסדר. ניתן לצאת.' 
+                        body: 'שמחים שאתם בסדר. ניתן לצאת מהמרחב המוגן.' 
                     }, 
                     token: userPushToken 
                 }).catch(err => console.error(err));
