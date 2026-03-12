@@ -35,6 +35,9 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
+// מגן ספאם במיוחד לחזל"שים (חסימה ל-5 דקות)
+const userLastClearTime = new Map();
+
 const usersStatus = new Map();
 const userPushTokens = new Map();
 
@@ -387,21 +390,25 @@ app.post('/api/webhook-clear', async (req, res) => {
         
         for (let i = 0; i < cities.length; i += 10) {
             const chunk = cities.slice(i, i + 10);
-            const snapshot = await db.collection('users').where('targetRegions', 'array-contains-any', chunk).get();
-            snapshot.forEach(doc => {
-                usersToClear.set(doc.id, doc.data());
-            });
+            
+            // מחפש לפי מרחבים (איך שפיקוד העורף שולח)
+            const snapshotRegions = await db.collection('users').where('targetRegions', 'array-contains-any', chunk).get();
+            snapshotRegions.forEach(doc => usersToClear.set(doc.id, doc.data()));
+            
+            // מחפש גם לפי עיר מדויקת (עבור הטסטים שלך)
+            const snapshotCities = await db.collection('users').where('targetCities', 'array-contains-any', chunk).get();
+            snapshotCities.forEach(doc => usersToClear.set(doc.id, doc.data()));
         }
         
         usersToClear.forEach((userRecord, userId) => {
-            // --- התיקון למניעת ספאם חזל"ש: שולחים פוש רק למי שהיה תחת אזעקה פעילה ---
-            if (!userLastAlert.has(userId)) {
-                return; // המשתמש לא תחת אזעקה פעילה במערכת, מדלגים עליו
+            // --- התיקון הקריטי למניעת ספאם (עמיד לריסטרטים) ---
+            const lastClear = userLastClearTime.get(userId) || 0;
+            if (Date.now() - lastClear < 5 * 60 * 1000) {
+                return; // אם כבר נשלח לו חזל"ש ב-5 דקות האחרונות, דלג!
             }
+            userLastClearTime.set(userId, Date.now()); // מעדכן את זמן החזל"ש האחרון
 
-            // מוחקים מהזיכרון כדי שהחזל"ש הבא (אם יגיע בטעות) יסונן
-            userLastAlert.delete(userId);
-            
+            userLastAlert.delete(userId); // משחרר את מגן ה-12 דקות של האזעקות
             usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
             const userGroups = userRecord.groups || [];
