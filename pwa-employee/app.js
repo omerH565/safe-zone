@@ -365,7 +365,11 @@ window.pingGroup = async function(groupId) {
             await fetch(`${SERVER_URL}/api/ping-group`, { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ groupId: groupId, senderName: currentUserName }) 
+                body: JSON.stringify({ 
+                    groupId: groupId, 
+                    senderName: currentUserName,
+                    senderId: currentUserId 
+                }) 
             });
             alert('התראה נשלחה!');
         } catch (e) {

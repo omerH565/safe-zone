@@ -254,7 +254,8 @@ app.post('/api/register-push', async (req, res) => {
 });
 
 app.post('/api/ping-group', async (req, res) => {
-    const { groupId, senderName } = req.body;
+    // קולטים את ה-ID של השולח
+    const { groupId, senderName, senderId } = req.body; 
     if (!groupId || !senderName) return res.status(400).json({ error: 'Missing params' });
 
     try {
@@ -279,7 +280,9 @@ app.post('/api/ping-group', async (req, res) => {
             io.emit('ping_alert_for_user', { userId: userId, senderName: senderName, groupId: groupId });
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
-            if (userPushToken) {
+            
+            // 👈 התיקון: שולחים פוש רק אם היוזר הנוכחי הוא *לא* השולח
+            if (userPushToken && userId !== senderId) {
                 admin.messaging().send({
                     notification: {
                         title: `🔔 בדיקת נוכחות: קבוצת ${groupId}`,
