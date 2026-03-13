@@ -446,9 +446,13 @@ window.toggleGroup = function(groupId) {
 window.toggleEditMode = function(groupId) {
     const container = document.getElementById(`members-${groupId}`);
     const deleteBtns = container.querySelectorAll('.delete-member-btn');
+    
     deleteBtns.forEach(btn => {
-        // מחליף מצב בין מוסתר למוצג
-        btn.style.display = btn.style.display === 'none' ? 'flex' : 'none';
+        // מנטרלים את קלאס ההסתרה הקשיח כדי שה-JS יוכל לקחת פיקוד
+        btn.classList.remove('hidden');
+        
+        // מחליפים בין מצב מוסתר (none) למצב מוצג וממורכז (flex)
+        btn.style.display = (btn.style.display === 'none' || btn.style.display === '') ? 'flex' : 'none';
     });
 };
 
