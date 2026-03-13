@@ -163,11 +163,23 @@ function initApp() {
     });
 
     document.getElementById('btn-google-login').addEventListener('click', () => { 
-        auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); 
+        auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+            .catch(error => {
+                console.error("Google Login Error:", error);
+                alert("שגיאת התחברות (גוגל): " + error.message);
+            }); 
     });
     
     document.getElementById('btn-facebook-login').addEventListener('click', () => { 
-        auth.signInWithPopup(new firebase.auth.FacebookAuthProvider()); 
+        auth.signInWithPopup(new firebase.auth.FacebookAuthProvider())
+            .catch(error => {
+                console.error("Facebook Login Error:", error);
+                if (error.code === 'auth/account-exists-with-different-credential') {
+                    alert("המייל הזה כבר רשום במערכת (כנראה דרך גוגל). אנא התחבר עם החשבון המקורי שלך.");
+                } else {
+                    alert("שגיאת התחברות (פייסבוק): " + error.message);
+                }
+            }); 
     });
 
     document.getElementById('btn-add-onboarding-city').addEventListener('click', () => {

@@ -221,6 +221,9 @@ io.on('connection', (socket) => {
                 isEarlyWarning: isEarlyWarning,
                 status: currentStatus // הזרקת הסטטוס
             });
+        }else {
+            // התיקון הקריטי למסכים תקועים: אם למשתמש אין אזעקה פעילה בשרת, תשגר לו פקודת ניקוי כדי למחוק מסכים צהובים/אדומים מהעבר!
+            socket.emit('clear_alert_for_user', { userId: userId });
         }
     });
 });
