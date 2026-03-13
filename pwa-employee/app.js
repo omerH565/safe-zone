@@ -1,3 +1,32 @@
+// --- CTO Trick: Deferred Deep Linking (שמירת הקישור להתקנה) ---
+function preserveJoinLinkForInstall() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinGroupId = urlParams.get('join');
+    
+    if (joinGroupId) {
+        // גיבוי 1: לאנדרואיד / דסקטופ (LocalStorage)
+        localStorage.setItem('pending_join_group', joinGroupId);
+        
+        // גיבוי 2: לאייפון (iOS) - עריכה דינמית של המניפסט
+        const manifestLink = document.getElementById('manifest-link');
+        if (manifestLink) {
+            fetch('manifest.json')
+                .then(res => res.json())
+                .then(manifest => {
+                    // מזריקים את הקישור לתוך כתובת ההתחלה של האפליקציה!
+                    manifest.start_url = window.location.pathname + "?join=" + joinGroupId;
+                    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+                    manifestLink.href = URL.createObjectURL(blob);
+                    console.log("✅ Manifest dynamically updated with join link!");
+                })
+                .catch(e => console.error("Error updating manifest", e));
+        }
+    }
+}
+
+// נפעיל מיד כשהקובץ עולה כדי לתפוס את הקישור לפני ההתקנה
+preserveJoinLinkForInstall();
+
 const SERVER_URL = 'https://safezone-api-uozd.onrender.com';
 const socket = io(SERVER_URL);
 
@@ -72,8 +101,9 @@ function renderCityTags(citiesArray, containerId, removeCallback) {
 }
 
 function initApp() {
+    // התיקון הקריטי: שואבים את הקישור או מה-URL הנוכחי או מהזיכרון שהשארנו לפני ההתקנה
     const urlParams = new URLSearchParams(window.location.search);
-    const joinGroupId = urlParams.get('join');
+    const joinGroupId = urlParams.get('join') || localStorage.getItem('pending_join_group');
     
     if (isRunningAsPWA()) {
         const installBanner = document.getElementById('pwa-install-banner');
@@ -287,6 +317,9 @@ function handleJoinGroup(groupId) {
         
         alert(`הצטרפת בהצלחה לקבוצה: ${groupId}`);
     }
+    
+    // מנקים הכל כדי שלא יצורף שוב בטעות ברענון
+    localStorage.removeItem('pending_join_group');
     window.history.replaceState({}, document.title, window.location.pathname);
 }
 
@@ -368,7 +401,7 @@ window.pingGroup = async function(groupId) {
                 body: JSON.stringify({ 
                     groupId: groupId, 
                     senderName: currentUserName,
-                    senderId: currentUserId 
+                    senderId: currentUserId // מועבר מהעדכון הקודם כדי למנוע פוש עצמי
                 }) 
             });
             alert('התראה נשלחה!');
@@ -386,15 +419,12 @@ socket.on('new_alert_for_user', (data) => {
         
         document.getElementById('alert-banner').style.animation = 'pulse 1.5s infinite';
         
-        // --- התיקון הכירורגי: סנכרון תצוגה מול מצב השרת ---
         const userStatus = data.status || 'pending'; 
         
         if (userStatus === 'pending') {
-            // המשתמש טרם דיווח, מציגים כפתורים
             document.querySelector('.action-buttons').classList.remove('hidden');
             document.getElementById('status-message').classList.add('hidden');
         } else {
-            // המשתמש כבר דיווח קודם לכן (מגן 12 דקות), מסתירים כפתורים
             document.querySelector('.action-buttons').classList.add('hidden');
             document.getElementById('status-message').classList.remove('hidden');
         }
@@ -463,7 +493,6 @@ async function reportStatus(status) {
     }
 }
 
-// פונקציה לעדכון תצוגת השהייה בממ"ד
 function updateShelterDisplay(startTimeMs, displayElement) {
     const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startTimeMs) / 1000));
     const mins = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
@@ -471,15 +500,12 @@ function updateShelterDisplay(startTimeMs, displayElement) {
     displayElement.innerText = `זמן במרחב המוגן: ${mins}:${secs}`;
 }
 
-// הפעלת שעון העצר לשהייה בממ"ד (אחרי סיום ה-90 שניות)
 function startShelterStopwatch(shelterStartTimeMs) {
     if (shelterInterval) clearInterval(shelterInterval);
     const timerDisplay = document.getElementById('timer');
     
-    // --- מפסיקים את ההבהוב המעיק כשהספירה לאחור נגמרת ---
     document.getElementById('alert-banner').style.animation = 'none';
     
-    // עדכון ראשוני מיידי
     updateShelterDisplay(shelterStartTimeMs, timerDisplay);
     
     shelterInterval = setInterval(() => {
@@ -487,7 +513,6 @@ function startShelterStopwatch(shelterStartTimeMs) {
     }, 1000);
 }
 
-// טיימר יורד מ-90 שניות ואז עובר אוטומטית לשעון שהייה
 function startTimer(durationSeconds, startTimeMs) {
     if (currentTimer) clearInterval(currentTimer); 
     if (stopwatchInterval) clearInterval(stopwatchInterval);
@@ -496,7 +521,6 @@ function startTimer(durationSeconds, startTimeMs) {
     const timerDisplay = document.getElementById('timer');
     const startTimestamp = startTimeMs || Date.now();
     
-    // בדיקה מיידית למקרה שהמשתמש נכנס אחרי שכבר עברו 90 שניות
     const initialElapsed = Math.floor((Date.now() - startTimestamp) / 1000);
     if (durationSeconds - initialElapsed <= 0) {
         const exactShelterStartTime = startTimestamp + (durationSeconds * 1000);
@@ -510,7 +534,6 @@ function startTimer(durationSeconds, startTimeMs) {
         
         if (timeLeft <= 0) {
             clearInterval(currentTimer); 
-            // מחשב את הרגע המדויק שבו הסתיימו ה-90 שניות ומתחיל ממנו את שעון השהייה
             const exactShelterStartTime = startTimestamp + (durationSeconds * 1000);
             startShelterStopwatch(exactShelterStartTime);
         } else { 
@@ -519,7 +542,6 @@ function startTimer(durationSeconds, startTimeMs) {
     }, 1000);
 }
 
-// שעון עצר שעולה מאפס (עבור התרעות מקדימות בלבד)
 function startStopwatch(startTimeMs) {
     if (currentTimer) clearInterval(currentTimer);
     if (stopwatchInterval) clearInterval(stopwatchInterval);
