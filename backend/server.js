@@ -362,11 +362,14 @@ app.post('/api/webhook-alert', async (req, res) => {
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             if (userPushToken && currentStatus !== 'protected') {
+                // התיקון הקריטי: מוצא את העיר האמיתית של היוזר מתוך רשימת האזעקה!
+                const matchedCity = cities.find(c => (userRecord.targetCities || []).includes(c)) || cities[0];
+                
                 const title = isEarlyWarning ? '⚠️ התרעה מקדימה באזורך' : '🚨 אזעקה באזורך!';
                 admin.messaging().send({ 
                     notification: { 
                         title: title, 
-                        body: `היכנסו למרחב מוגן. אזור: ${cities[0]}` 
+                        body: `היכנסו למרחב מוגן. אזור: ${matchedCity}` 
                     }, 
                     token: userPushToken 
                 }).catch(err => console.error(err));
@@ -400,15 +403,15 @@ app.post('/api/webhook-clear', async (req, res) => {
             snapshotCities.forEach(doc => usersToClear.set(doc.id, doc.data()));
         }
         
-        usersToClear.forEach((userRecord, userId) => {
-            // --- התיקון הקריטי למניעת ספאם (עמיד לריסטרטים) ---
+       usersToClear.forEach((userRecord, userId) => {
+            // הגנת ספאם חדשה: מונע כפילויות של חזל"ש באותו מרחב למשך 5 דקות
             const lastClear = userLastClearTime.get(userId) || 0;
             if (Date.now() - lastClear < 5 * 60 * 1000) {
-                return; // אם כבר נשלח לו חזל"ש ב-5 דקות האחרונות, דלג!
+                return; 
             }
-            userLastClearTime.set(userId, Date.now()); // מעדכן את זמן החזל"ש האחרון
+            userLastClearTime.set(userId, Date.now()); 
 
-            userLastAlert.delete(userId); // משחרר את מגן ה-12 דקות של האזעקות
+            userLastAlert.delete(userId);
             usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             
             const userGroups = userRecord.groups || [];
@@ -421,6 +424,7 @@ app.post('/api/webhook-clear', async (req, res) => {
                 });
             });
             
+            // תמיד שולחים סוקט שינקה את המסך באפליקציה מבאגים וטיימרים תקועים!
             io.emit('clear_alert_for_user', { userId: userId });
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
