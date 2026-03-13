@@ -572,11 +572,23 @@ function startStopwatch(startTimeMs) {
 
 socket.on('clear_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
+        // בודקים האם מסך האזעקה או הפינג היו בכלל דלוקים הרגע?
+        const wasAlertActive = !document.getElementById('alert-banner').classList.contains('hidden') || 
+                               !document.getElementById('ping-banner').classList.contains('hidden');
+
         document.getElementById('alert-banner').classList.add('hidden');
         document.getElementById('ping-banner').classList.add('hidden');
         document.querySelector('.action-buttons').classList.add('hidden');
         document.getElementById('status-message').classList.add('hidden');
-        document.getElementById('all-clear-banner').classList.remove('hidden');
+        
+        // הלוגיקה החדשה: מציגים ירוק רק אם זה חזל"ש אמיתי מהשטח (!isSync), 
+        // או אם באמת ניקינו מסך שהיה תקוע באזעקה פעילה. 
+        // אם זה סתם התחברות טרייה - תשאיר הכל מוסתר.
+        if (!data.isSync || wasAlertActive) {
+            document.getElementById('all-clear-banner').classList.remove('hidden');
+        } else {
+            document.getElementById('all-clear-banner').classList.add('hidden');
+        }
         
         if (currentTimer) clearInterval(currentTimer);
         if (stopwatchInterval) clearInterval(stopwatchInterval);

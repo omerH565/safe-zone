@@ -223,7 +223,7 @@ io.on('connection', (socket) => {
             });
         }else {
             // התיקון הקריטי למסכים תקועים: אם למשתמש אין אזעקה פעילה בשרת, תשגר לו פקודת ניקוי כדי למחוק מסכים צהובים/אדומים מהעבר!
-            socket.emit('clear_alert_for_user', { userId: userId });
+            socket.emit('clear_alert_for_user', { userId: userId, isSync: true });
         }
     });
 });
