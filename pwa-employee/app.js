@@ -359,15 +359,19 @@ socket.on('group_member_status', (data) => {
         groupDiv = document.createElement('div'); 
         groupDiv.id = `group-${groupId}`; 
         groupDiv.className = 'group-card';
+        // הוספנו חץ קליקבילי וכפתור עריכה ✏️
         groupDiv.innerHTML = `
-            <div class="group-header" style="display: flex; justify-content: space-between; border-bottom: 1px solid #374151; padding-bottom: 5px; margin-bottom: 10px;">
-                <h4 style="margin: 0; color: #9ca3af;">${groupId}</h4>
-                <div>
-                    <button onclick="pingGroup('${groupId}')" style="background: none; border: none; color: #eab308; cursor: pointer;">🔔</button>
-                    <button onclick="copyInviteLink('${groupId}')" style="background: none; border: none; color: #3b82f6; cursor: pointer;">🔗</button>
+            <div class="group-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 8px; margin-bottom: 10px;">
+                <h4 onclick="toggleGroup('${groupId}')" style="margin: 0; color: #9ca3af; cursor: pointer; flex-grow: 1; display: flex; align-items: center; gap: 5px;">
+                    <span id="arrow-${groupId}">▼</span> ${groupId}
+                </h4>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="toggleEditMode('${groupId}')" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.1rem;">✏️</button>
+                    <button onclick="pingGroup('${groupId}')" style="background: none; border: none; color: #eab308; cursor: pointer; font-size: 1.1rem;">🔔</button>
+                    <button onclick="copyInviteLink('${groupId}')" style="background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1.1rem;">🔗</button>
                 </div>
             </div>
-            <div class="members-container" id="members-${groupId}"></div>
+            <div class="members-container" id="members-${groupId}" style="display: block; transition: all 0.3s ease;"></div>
         `;
         groupsList.appendChild(groupDiv);
     }
@@ -385,8 +389,12 @@ socket.on('group_member_status', (data) => {
     const statusClass = status === 'pending' ? 'pending' : status;
     const displayName = userId === currentUserId ? `${name} (אני)` : name;
     
+    // הוספנו את כפתור ה-X שמוסתר כברירת מחדל
     memberDiv.innerHTML = `
-        <span>${displayName}</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <button class="delete-member-btn hidden" onclick="removeMember('${userId}', '${groupId}', '${displayName}')" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; cursor: pointer; display: none; align-items: center; justify-content: center; font-weight: bold;">✕</button>
+            <span>${displayName}</span>
+        </div>
         <span class="status-dot ${statusClass}"></span>
     `;
 });
@@ -422,6 +430,63 @@ window.pingGroup = async function(groupId) {
         }
     }
 };
+
+window.toggleGroup = function(groupId) {
+    const container = document.getElementById(`members-${groupId}`);
+    const arrow = document.getElementById(`arrow-${groupId}`);
+    if (container.style.display === 'none') {
+        container.style.display = 'block';
+        arrow.innerText = '▼';
+    } else {
+        container.style.display = 'none';
+        arrow.innerText = '◀';
+    }
+};
+
+window.toggleEditMode = function(groupId) {
+    const container = document.getElementById(`members-${groupId}`);
+    const deleteBtns = container.querySelectorAll('.delete-member-btn');
+    deleteBtns.forEach(btn => {
+        // מחליף מצב בין מוסתר למוצג
+        btn.style.display = btn.style.display === 'none' ? 'flex' : 'none';
+    });
+};
+
+window.removeMember = async function(targetUserId, groupId, displayName) {
+    if(confirm(`האם אתה בטוח שברצונך להסיר את ${displayName} מקבוצת ${groupId}?`)) {
+        try {
+            await fetch(`${SERVER_URL}/api/remove-member`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUserId: targetUserId, groupId: groupId })
+            });
+        } catch (e) {
+            console.error("Error removing member", e);
+        }
+    }
+};
+
+// האזנות לאירועי מחיקה
+socket.on('member_removed', (data) => {
+    const memberDiv = document.getElementById(`member-${data.userId}-${data.groupId}`);
+    if (memberDiv) memberDiv.remove();
+    
+    // מעלים את הקבוצה לגמרי אם היא נשארה ריקה
+    const membersContainer = document.getElementById(`members-${data.groupId}`);
+    if (membersContainer && membersContainer.children.length === 0) {
+        const groupDiv = document.getElementById(`group-${data.groupId}`);
+        if (groupDiv) groupDiv.remove();
+    }
+});
+
+socket.on('you_were_removed', (data) => {
+    if (data.userId === currentUserId) {
+        userGroups = userGroups.filter(g => g !== data.groupId);
+        localStorage.setItem('safeZone_groups', JSON.stringify(userGroups));
+        alert(`הוסרת מקבוצת ${data.groupId}`);
+        window.location.reload(); // טוען מחדש כדי לאתחל את התצוגה ללא הקבוצה
+    }
+});
 
 socket.on('new_alert_for_user', (data) => {
     if(data.userId === currentUserId) {

@@ -302,6 +302,31 @@ app.post('/api/ping-group', async (req, res) => {
     }
 });
 
+app.post('/api/remove-member', async (req, res) => {
+    const { targetUserId, groupId } = req.body;
+    if (!targetUserId || !groupId) return res.status(400).json({ error: 'Missing params' });
+
+    try {
+        const userRef = db.collection('users').doc(targetUserId);
+        const doc = await userRef.get();
+        if (doc.exists) {
+            const existingGroups = doc.data().groups || [];
+            // מסננים החוצה את הקבוצה שהמשתמש הוסר ממנה
+            const updatedGroups = existingGroups.filter(g => g !== groupId);
+            await userRef.update({ groups: updatedGroups });
+            
+            // מודיעים לכל מי שפתוח על הקבוצה הזו להעלים את המשתמש מה-UI
+            io.to(groupId).emit('member_removed', { userId: targetUserId, groupId: groupId });
+            
+            // מודיעים למשתמש עצמו כדי שהאפליקציה שלו תתעדכן
+            io.emit('you_were_removed', { userId: targetUserId, groupId: groupId });
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/webhook-alert', async (req, res) => {
     const { secret, cities, isEarlyWarning } = req.body;
     
