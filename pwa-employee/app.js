@@ -100,6 +100,41 @@ function renderCityTags(citiesArray, containerId, removeCallback) {
     });
 }
 
+window.checkSystemRequirements = function() {
+    const banner = document.getElementById('system-action-banner');
+    const textElement = document.getElementById('system-action-text');
+    const iconElement = document.getElementById('system-action-icon');
+    
+    if (!banner) return;
+
+    // 1. קודם בודקים אם חסרה התקנה למסך הבית (PWA)
+    if (!isRunningAsPWA()) {
+        banner.style.display = 'flex';
+        iconElement.innerText = '📱';
+        textElement.innerText = 'לחץ כאן כדי להתקין את האפליקציה!';
+        banner.onclick = () => {
+            alert('להתקנה מלאה וקבלת התראות:\n\nבאייפון (Safari): לחץ על כפתור השיתוף ⍗ למטה, ואז בחר "הוסף למסך הבית".\n\nבאנדרואיד (Chrome): פתח את תפריט 3 הנקודות למעלה ובחר "התקן אפליקציה".');
+        };
+        return;
+    }
+
+    // 2. אם מותקן, בודקים אם חסר אישור פוש
+    if ('Notification' in window && Notification.permission !== 'granted') {
+        banner.style.display = 'flex';
+        iconElement.innerText = '🔔';
+        textElement.innerText = 'התראות כבויות - לחץ כאן להפעלת PUSH';
+        banner.onclick = async () => {
+            await requestPushPermission();
+            // בודק שוב אחרי הלחיצה כדי להעלים את הבאנר אם האישור ניתן
+            setTimeout(checkSystemRequirements, 1000); 
+        };
+        return;
+    }
+
+    // 3. הכל מוגדר פיקס! מסתירים את הבאנר
+    banner.style.display = 'none';
+};
+
 function initApp() {
     // התיקון הקריטי: שואבים את הקישור או מה-URL הנוכחי או מהזיכרון שהשארנו לפני ההתקנה
     const urlParams = new URLSearchParams(window.location.search);
@@ -150,9 +185,7 @@ function initApp() {
                 
                 connectToServer();
                 
-                if (isRunningAsPWA() && Notification.permission !== 'granted') {
-                    requestPushPermission();
-                }
+                checkSystemRequirements();
             }
         } else {
             mainApp.classList.add('hidden'); 
@@ -278,9 +311,7 @@ function initApp() {
         
         connectToServer();
         
-        if (isRunningAsPWA() && Notification.permission !== 'granted') {
-            requestPushPermission();
-        }
+        checkSystemRequirements();
     });
 } // סגירת פונקציית initApp() - שומרים עליה!
 
@@ -295,9 +326,13 @@ document.getElementById('btn-settings').addEventListener('click', () => {
     });
     
     const pushBtn = document.getElementById('btn-enable-push');
-    if (isRunningAsPWA() && Notification.permission !== 'granted') {
+    
+    // בדיקה אוניברסלית: האם הדפדפן בכלל תומך בהתראות? והאם טרם ניתן אישור?
+    if ('Notification' in window && Notification.permission !== 'granted') {
+        // גם אם זה סירב בעבר (denied) או ממתין (default) - נציג את הכפתור
         pushBtn.classList.remove('hidden');
     } else {
+        // יוסתר רק אם האישור כבר ניתן (granted) או שהדפדפן (כמו ספארי רגיל) לא תומך
         pushBtn.classList.add('hidden');
     }
     
