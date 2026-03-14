@@ -461,19 +461,28 @@ socket.on('group_member_status', (data) => {
         groupDiv.innerHTML = `
             <div class="group-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 8px; margin-bottom: 10px;">
                 <h4 onclick="toggleGroup('${groupId}')" style="margin: 0; color: #9ca3af; cursor: pointer; flex-grow: 1; display: flex; align-items: center; gap: 5px;">
-                    <span id="arrow-${groupId}">◀</span> ${groupId}
+                    <span id="arrow-${groupId}">▼</span> ${groupId}
                 </h4>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="pingGroup('${groupId}')" style="background: none; border: none; color: #eab308; cursor: pointer; font-size: 1.2rem;">🔔</button>
+                
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button onclick="pingGroup('${groupId}')" style="background: none; border: none; color: #eab308; cursor: pointer; font-size: 1.2rem; padding: 0;">🔔</button>
+                    
+                    <div style="position: relative;">
+                        <button onclick="toggleDropdown('${groupId}', event)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 0 5px; font-weight: bold;">⋮</button>
+                        
+                        <div id="dropdown-${groupId}" class="dropdown-menu" style="display: none; position: absolute; left: 0; top: 100%; background: #1f2937; border: 1px solid #4b5563; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 50; min-width: 150px; flex-direction: column; overflow: hidden; margin-top: 8px;">
+                            <button onclick="toggleEditMode('${groupId}'); closeAllDropdowns();" style="background: none; border: none; border-bottom: 1px solid #374151; color: white; padding: 12px 15px; text-align: right; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; width: 100%;">
+                                ✏️ ערוך חברים
+                            </button>
+                            <button onclick="copyInviteLink('${groupId}'); closeAllDropdowns();" style="background: none; border: none; color: white; padding: 12px 15px; text-align: right; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; width: 100%;">
+                                🔗 העתק קישור
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <div id="group-actions-${groupId}" style="display: none; justify-content: flex-start; gap: 15px; margin-bottom: 10px; padding-top: 5px; border-bottom: 1px dashed #4b5563; padding-bottom: 10px;">
-                <button onclick="toggleEditMode('${groupId}')" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 4px;">✏️ ערוך חברים</button>
-                <button onclick="copyInviteLink('${groupId}')" style="background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 4px;">🔗 העתק קישור</button>
-            </div>
-            
-            <div class="members-container" id="members-${groupId}" style="display: none; transition: all 0.3s ease;"></div>
+            <div class="members-container" id="members-${groupId}" style="display: block; transition: all 0.3s ease;"></div>
         `;
         groupsList.appendChild(groupDiv);
     }
@@ -535,28 +544,51 @@ window.pingGroup = async function(groupId) {
 
 window.toggleGroup = function(groupId) {
     const container = document.getElementById(`members-${groupId}`);
-    const actions = document.getElementById(`group-actions-${groupId}`);
     const arrow = document.getElementById(`arrow-${groupId}`);
     if (container.style.display === 'none') {
         container.style.display = 'block';
-        actions.style.display = 'flex'; // מציג את כפתורי העריכה והקישור
         arrow.innerText = '▼';
     } else {
         container.style.display = 'none';
-        actions.style.display = 'none'; // מסתיר את כפתורי העריכה והקישור
         arrow.innerText = '◀';
     }
 };
+
+window.toggleDropdown = function(groupId, event) {
+    event.stopPropagation(); // מונע סגירה מיידית של התפריט
+    const dropdown = document.getElementById(`dropdown-${groupId}`);
+    const isCurrentlyOpen = dropdown.style.display === 'flex';
+    
+    closeAllDropdowns(); // סוגר תפריטים של קבוצות אחרות אם נשארו פתוחים
+    
+    if (!isCurrentlyOpen) {
+        dropdown.style.display = 'flex';
+    }
+};
+
+window.closeAllDropdowns = function() {
+    const dropdowns = document.querySelectorAll('.dropdown-menu');
+    dropdowns.forEach(menu => {
+        menu.style.display = 'none';
+    });
+};
+
+// מאזין גלובלי - סוגר את התפריט אם המשתמש לוחץ בכל מקום אחר במסך
+document.addEventListener('click', () => {
+    closeAllDropdowns();
+});
 
 window.toggleEditMode = function(groupId) {
     const container = document.getElementById(`members-${groupId}`);
     const deleteBtns = container.querySelectorAll('.delete-member-btn');
     
+    // אם התיקייה סגורה, נפתח אותה קודם כדי שהמשתמש יראה מה הוא עורך
+    if (container.style.display === 'none') {
+        toggleGroup(groupId);
+    }
+    
     deleteBtns.forEach(btn => {
-        // מנטרלים את קלאס ההסתרה הקשיח כדי שה-JS יוכל לקחת פיקוד
         btn.classList.remove('hidden');
-        
-        // מחליפים בין מצב מוסתר (none) למצב מוצג וממורכז (flex)
         btn.style.display = (btn.style.display === 'none' || btn.style.display === '') ? 'flex' : 'none';
     });
 };
