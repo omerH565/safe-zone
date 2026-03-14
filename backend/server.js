@@ -291,7 +291,7 @@ app.post('/api/ping-group', async (req, res) => {
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             
-            // 👈 התיקון: שולחים פוש רק אם היוזר הנוכחי הוא *לא* השולח
+            // 👈 שולחים פוש רק אם היוזר הנוכחי הוא *לא* השולח
             if (userPushToken && userId !== senderId) {
                 admin.messaging().send({
                     notification: {
@@ -374,6 +374,9 @@ app.post('/api/webhook-alert', async (req, res) => {
 
             userLastAlert.set(userId, { time: now, type: alertType });
             
+            // התיקון הכירורגי: מוחקים את ההגנה של החזל"ש כדי שהטסט הבא יעבוד חלק
+            userLastClearTime.delete(userId); 
+            
             if (shouldResetStatus) {
                 usersStatus.set(userId, { name: userRecord.name, status: 'pending', time: new Date() });
             }
@@ -400,7 +403,7 @@ app.post('/api/webhook-alert', async (req, res) => {
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             if (userPushToken && currentStatus !== 'protected') {
-                // התיקון הקריטי: מוצא את העיר האמיתית של היוזר מתוך רשימת האזעקה!
+                // מוצא את העיר האמיתית של היוזר מתוך רשימת האזעקה!
                 const matchedCity = cities.find(c => (userRecord.targetCities || []).includes(c)) || cities[0];
                 
                 const title = isEarlyWarning ? '⚠️ התרעה מקדימה באזורך' : '🚨 אזעקה באזורך!';
@@ -442,7 +445,7 @@ app.post('/api/webhook-clear', async (req, res) => {
         }
         
        usersToClear.forEach((userRecord, userId) => {
-            // הגנת ספאם חדשה: מונע כפילויות של חזל"ש באותו מרחב למשך 5 דקות
+            // הגנת ספאם: מונע כפילויות של חזל"ש באותו מרחב למשך 5 דקות
             const lastClear = userLastClearTime.get(userId) || 0;
             if (Date.now() - lastClear < 5 * 60 * 1000) {
                 return; 
