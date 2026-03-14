@@ -104,6 +104,8 @@
             </div>
             
             <div id="setup-section" class="hidden">
+                <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">איך תרצו שנקרא לכם?</p>
+                <input type="text" id="setup-name-input" placeholder="הכנס שם (למשל: עומר)..." class="input-field" style="margin-bottom: 15px;">
                 <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">בחר אזורי התרעה:</p>
                 <div style="display: flex; gap: 8px; margin-bottom: 10px;">
                     <input type="text" id="onboarding-city-input" list="israel-cities-list" placeholder="הקלד עיר או יישוב..." class="input-field" style="margin-bottom: 0;">
@@ -119,8 +121,9 @@
     <div id="settings-modal" class="modal hidden">
         <div class="modal-content">
             <h2>הגדרות ⚙️</h2>
-            <p id="settings-username-display" style="color: #9ca3af; margin-bottom: 15px;"></p>
-            
+            <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">שם תצוגה:</p>
+            <input type="text" id="settings-name-input" class="input-field" style="margin-bottom: 15px;">
+
             <p style="margin-top: 15px; text-align: right; font-size: 0.9rem; margin-bottom: 5px;">עדכן אזורי התרעה:</p>
             <div style="display: flex; gap: 8px; margin-bottom: 10px;">
                 <input type="text" id="settings-city-input" list="israel-cities-list" placeholder="הקלד עיר או יישוב..." class="input-field" style="margin-bottom: 0;">
@@ -168,7 +171,7 @@
 
         <div id="status-message" class="hidden">
             <h2 id="final-status-text"></h2>
-            <p>שמור על עצמך והישאר במרחב המוגן 12 דקות.</p>
+            <p id="shelter-instruction-text">שמור על עצמך והישאר במרחב המוגן 12 דקות.</p>
         </div>
 
         <div id="groups-container" style="margin-top: 30px; text-align: right;">

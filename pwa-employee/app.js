@@ -252,11 +252,19 @@ function initApp() {
         }
     });
 
-    document.getElementById('btn-start').addEventListener('click', () => {
+   document.getElementById('btn-start').addEventListener('click', () => {
+        const enteredName = document.getElementById('setup-name-input').value.trim();
         if (tempOnboardingCities.length === 0) {
             alert('חובה לבחור עיר אחת לפחות');
             return;
         }
+        if (!enteredName) {
+            alert('חובה להזין שם תצוגה');
+            return;
+        }
+        
+        currentUserName = enteredName;
+        auth.currentUser.updateProfile({ displayName: currentUserName });
         
         userCities = tempOnboardingCities;
         localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
@@ -274,12 +282,13 @@ function initApp() {
             requestPushPermission();
         }
     });
-}
+} // סגירת פונקציית initApp() - שומרים עליה!
 
 document.getElementById('btn-settings').addEventListener('click', () => {
-    document.getElementById('settings-username-display').innerText = `מחובר כ: ${currentUserName}`;
-    tempSettingsCities = [...userCities]; 
+    // מציג את השם הנוכחי בשדה (ומעלים אם זה שם רנדומלי מה-SMS)
+    document.getElementById('settings-name-input').value = (currentUserName && currentUserName.startsWith('משתמש_')) ? '' : currentUserName;
     
+    tempSettingsCities = [...userCities]; 
     renderCityTags(tempSettingsCities, 'settings-city-tags', (idx) => { 
         tempSettingsCities.splice(idx, 1); 
         renderCityTags(tempSettingsCities, 'settings-city-tags', arguments.callee); 
@@ -293,6 +302,37 @@ document.getElementById('btn-settings').addEventListener('click', () => {
     }
     
     settingsModal.classList.remove('hidden');
+});
+
+// פונקציית העזר הגלובליות שנשארו במקום... (לא לגעת ב-btn-home, btn-enable-push, btn-add-settings-city, btn-close-settings, btn-logout אם הם פה אצלך)
+
+document.getElementById('btn-save-settings').addEventListener('click', () => {
+    const enteredName = document.getElementById('settings-name-input').value.trim();
+    if (tempSettingsCities.length === 0) {
+        alert('חובה לבחור עיר מועדפת');
+        return;
+    }
+    if (!enteredName) {
+        alert('חובה להזין שם תצוגה');
+        return;
+    }
+    
+    currentUserName = enteredName;
+    auth.currentUser.updateProfile({ displayName: currentUserName });
+    
+    userCities = tempSettingsCities;
+    localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
+    
+    socket.emit('update_settings', { 
+        userId: currentUserId, 
+        name: currentUserName, 
+        targetCities: userCities 
+    });
+    
+    // מעדכן את כותרת הברכה במסך הראשי מיד עם השמירה
+    document.getElementById('greeting-title').innerText = `שלום, ${currentUserName}`;
+    
+    settingsModal.classList.add('hidden');
 });
 
 document.getElementById('btn-home').addEventListener('click', () => {
@@ -421,15 +461,19 @@ socket.on('group_member_status', (data) => {
         groupDiv.innerHTML = `
             <div class="group-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 8px; margin-bottom: 10px;">
                 <h4 onclick="toggleGroup('${groupId}')" style="margin: 0; color: #9ca3af; cursor: pointer; flex-grow: 1; display: flex; align-items: center; gap: 5px;">
-                    <span id="arrow-${groupId}">▼</span> ${groupId}
+                    <span id="arrow-${groupId}">◀</span> ${groupId}
                 </h4>
                 <div style="display: flex; gap: 8px;">
-                    <button onclick="toggleEditMode('${groupId}')" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.1rem;">✏️</button>
-                    <button onclick="pingGroup('${groupId}')" style="background: none; border: none; color: #eab308; cursor: pointer; font-size: 1.1rem;">🔔</button>
-                    <button onclick="copyInviteLink('${groupId}')" style="background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 1.1rem;">🔗</button>
+                    <button onclick="pingGroup('${groupId}')" style="background: none; border: none; color: #eab308; cursor: pointer; font-size: 1.2rem;">🔔</button>
                 </div>
             </div>
-            <div class="members-container" id="members-${groupId}" style="display: block; transition: all 0.3s ease;"></div>
+            
+            <div id="group-actions-${groupId}" style="display: none; justify-content: flex-start; gap: 15px; margin-bottom: 10px; padding-top: 5px; border-bottom: 1px dashed #4b5563; padding-bottom: 10px;">
+                <button onclick="toggleEditMode('${groupId}')" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 4px;">✏️ ערוך חברים</button>
+                <button onclick="copyInviteLink('${groupId}')" style="background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 4px;">🔗 העתק קישור</button>
+            </div>
+            
+            <div class="members-container" id="members-${groupId}" style="display: none; transition: all 0.3s ease;"></div>
         `;
         groupsList.appendChild(groupDiv);
     }
@@ -491,12 +535,15 @@ window.pingGroup = async function(groupId) {
 
 window.toggleGroup = function(groupId) {
     const container = document.getElementById(`members-${groupId}`);
+    const actions = document.getElementById(`group-actions-${groupId}`);
     const arrow = document.getElementById(`arrow-${groupId}`);
     if (container.style.display === 'none') {
         container.style.display = 'block';
+        actions.style.display = 'flex'; // מציג את כפתורי העריכה והקישור
         arrow.innerText = '▼';
     } else {
         container.style.display = 'none';
+        actions.style.display = 'none'; // מסתיר את כפתורי העריכה והקישור
         arrow.innerText = '◀';
     }
 };
@@ -571,10 +618,14 @@ socket.on('new_alert_for_user', (data) => {
         if (data.isEarlyWarning) {
             document.getElementById('alert-title').innerText = "⚠️ התרעה מקדימה באזורך";
             document.getElementById('alert-banner').style.backgroundColor = "#eab308"; 
+            // שינוי טקסט ללוגיקת איום רחוק
+            document.getElementById('shelter-instruction-text').innerText = "שמור על עצמך. יש להישאר במרחב המוגן עד לקבלת הודעת שחרור מפיקוד העורף.";
             startStopwatch(data.startTime);
         } else {
             document.getElementById('alert-title').innerText = "🚨 אזעקה באזורך!";
             document.getElementById('alert-banner').style.backgroundColor = "#ef4444"; 
+            // החזרת טקסט ללוגיקת איום קרוב
+            document.getElementById('shelter-instruction-text').innerText = "שמור על עצמך והישאר במרחב המוגן 12 דקות.";
             startTimer(90, data.startTime);
         }
     }

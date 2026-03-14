@@ -203,13 +203,20 @@ io.on('connection', (socket) => {
             console.error("Error in join_via_link:", err);
         }
     });
+    
     // --- מנגנון התאוששות מאפליקציה סגורה / לחיצה על Push ---
     socket.on('check_active_alert', (userId) => {
         if (!userId) return;
         const lastAlertData = userLastAlert.get(userId);
         const now = Date.now();
         
-        if (lastAlertData && (now - lastAlertData.time < 12 * 60 * 1000)) {
+        // הלוגיקה החדשה: התרעה מקדימה ('warning') נשארת פעילה לנצח עד שמגיע חזל"ש רשמי. אזעקה רגילה פגה אחרי 12 דקות.
+        const isActiveAlert = lastAlertData && (
+            lastAlertData.type === 'warning' || 
+            (now - lastAlertData.time < 12 * 60 * 1000)
+        );
+        
+        if (isActiveAlert) {
             const isEarlyWarning = lastAlertData.type === 'warning';
             // בודק מה הסטטוס העדכני שלך בשרת
             const currentStatus = usersStatus.get(userId)?.status || 'pending'; 
@@ -221,8 +228,8 @@ io.on('connection', (socket) => {
                 isEarlyWarning: isEarlyWarning,
                 status: currentStatus // הזרקת הסטטוס
             });
-        }else {
-            // התיקון הקריטי למסכים תקועים: אם למשתמש אין אזעקה פעילה בשרת, תשגר לו פקודת ניקוי כדי למחוק מסכים צהובים/אדומים מהעבר!
+        } else {
+            // התיקון הקריטי למסכים תקועים: שולחים פקודת ניקוי עם דגל סנכרון שקט
             socket.emit('clear_alert_for_user', { userId: userId, isSync: true });
         }
     });
