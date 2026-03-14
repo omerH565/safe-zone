@@ -329,17 +329,6 @@ document.getElementById('btn-settings').addEventListener('click', () => {
         renderCityTags(tempSettingsCities, 'settings-city-tags', arguments.callee); 
     });
     
-    const pushBtn = document.getElementById('btn-enable-push');
-    
-    // בדיקה אוניברסלית: האם הדפדפן בכלל תומך בהתראות? והאם טרם ניתן אישור?
-    if ('Notification' in window && Notification.permission !== 'granted') {
-        // גם אם זה סירב בעבר (denied) או ממתין (default) - נציג את הכפתור
-        pushBtn.classList.remove('hidden');
-    } else {
-        // יוסתר רק אם האישור כבר ניתן (granted) או שהדפדפן (כמו ספארי רגיל) לא תומך
-        pushBtn.classList.add('hidden');
-    }
-    
     settingsModal.classList.remove('hidden');
 });
 
@@ -374,15 +363,12 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
     settingsModal.classList.add('hidden');
 });
 
-document.getElementById('btn-home').addEventListener('click', () => {
+document.getElementById('btn-manual-status').addEventListener('click', () => {
+    // חושף את כפתורי הדיווח (הירוק והאדום)
     document.querySelector('.action-buttons').classList.remove('hidden');
+    // מסתיר את הודעות הסטטוס או החזל"ש הקודמות
     document.getElementById('status-message').classList.add('hidden');
     document.getElementById('all-clear-banner').classList.add('hidden');
-});
-
-document.getElementById('btn-enable-push').addEventListener('click', () => { 
-    requestPushPermission(); 
-    document.getElementById('btn-enable-push').classList.add('hidden'); 
 });
 
 document.getElementById('btn-add-settings-city').addEventListener('click', () => {

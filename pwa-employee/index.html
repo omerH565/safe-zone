@@ -131,8 +131,6 @@
             </div>
             <div id="settings-city-tags" class="city-tags-container"></div>
 
-            <button id="btn-enable-push" class="btn btn-blue hidden" style="margin-top: 20px;">🔔 הפעל התראות (חובה)</button>
-
             <button id="btn-save-settings" class="btn btn-green" style="margin-top: 20px;">שמור שינויים</button>
             <button id="btn-logout" class="btn btn-red" style="margin-top: 10px;">התנתק (Logout)</button>
             <button id="btn-close-settings" class="btn" style="background: #374151; border: 1px solid #4b5563; margin-top: 10px;">ביטול</button>
@@ -142,11 +140,16 @@
     <div class="container" id="main-app" class="hidden">
 
         <div style="position: absolute; top: 20px; left: 20px; display: flex; gap: 15px; align-items: center;">
-            <button id="btn-home" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0; margin: 0;">🏠</button>
             <button id="btn-settings" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0; margin: 0;">⚙️</button>
         </div>
 
-        <h2 id="greeting-title" style="text-align: right; margin-bottom: 20px; margin-top: 40px;"></h2>
+        <h2 id="greeting-title" style="text-align: right; margin-bottom: 5px; margin-top: 40px;"></h2>
+        
+        <div style="text-align: right; margin-bottom: 25px;">
+            <button id="btn-manual-status" style="background: none; border: 1px solid #3b82f6; color: #3b82f6; padding: 6px 15px; border-radius: 6px; font-size: 0.95rem; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s;">
+                <span>✏️</span> עדכן מצב נוכחי
+            </button>
+        </div>
 
         <div id="system-requirements-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px;">
             
@@ -157,7 +160,7 @@
             
             <div id="banner-push" style="display: none; border: 1px solid #eab308; background: rgba(234, 179, 8, 0.05); color: #facc15; padding: 10px 15px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
                 <span style="font-size: 1.1rem;">🔔</span>
-                <span>אנא הפעל התראות</span>
+                <span>לקבלת התראות Push</span>
             </div>
             
         </div>
