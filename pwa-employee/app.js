@@ -162,7 +162,7 @@ function initApp() {
         }
     });
 
-    document.getElementById('btn-google-login').addEventListener('click', () => { 
+   document.getElementById('btn-google-login').addEventListener('click', () => { 
         auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
             .catch(error => {
                 console.error("Google Login Error:", error);
@@ -170,16 +170,74 @@ function initApp() {
             }); 
     });
     
-    document.getElementById('btn-facebook-login').addEventListener('click', () => { 
-        auth.signInWithPopup(new firebase.auth.FacebookAuthProvider())
-            .catch(error => {
-                console.error("Facebook Login Error:", error);
-                if (error.code === 'auth/account-exists-with-different-credential') {
-                    alert("המייל הזה כבר רשום במערכת (כנראה דרך גוגל). אנא התחבר עם החשבון המקורי שלך.");
-                } else {
-                    alert("שגיאת התחברות (פייסבוק): " + error.message);
-                }
-            }); 
+    // --- מערכת התחברות ב-SMS במקום פייסבוק ---
+    
+    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        'size': 'invisible',
+        'callback': (response) => {
+            // הריקאפצ'ה נפתרה
+        }
+    });
+
+    document.getElementById('btn-send-sms').addEventListener('click', () => {
+        const phoneInput = document.getElementById('phone-number').value.trim();
+        if (!phoneInput || phoneInput.length < 9) {
+            alert("אנא הזן מספר טלפון תקין");
+            return;
+        }
+        
+        let formattedPhone = phoneInput.startsWith('0') ? phoneInput.substring(1) : phoneInput;
+        const phoneNumber = "+972" + formattedPhone;
+
+        const appVerifier = window.recaptchaVerifier;
+        
+        document.getElementById('btn-send-sms').innerText = "שולח...";
+        document.getElementById('btn-send-sms').disabled = true;
+
+        auth.signInWithPhoneNumber(phoneNumber, appVerifier)
+            .then((confirmationResult) => {
+                window.confirmationResult = confirmationResult;
+                document.getElementById('phone-input-section').classList.add('hidden');
+                document.getElementById('otp-input-section').classList.remove('hidden');
+                document.getElementById('btn-send-sms').innerText = "שלח קוד ב-SMS";
+                document.getElementById('btn-send-sms').disabled = false;
+            }).catch((error) => {
+                console.error("SMS Error:", error);
+                alert("שגיאה בשליחת SMS. ודא שאישרת Phone ב-Firebase.");
+                window.recaptchaVerifier.render().then(function(widgetId) {
+                    grecaptcha.reset(widgetId);
+                });
+                document.getElementById('btn-send-sms').innerText = "שלח קוד ב-SMS";
+                document.getElementById('btn-send-sms').disabled = false;
+            });
+    });
+
+    document.getElementById('btn-verify-otp').addEventListener('click', () => {
+        const code = document.getElementById('otp-code').value.trim();
+        if (!code) return;
+
+        document.getElementById('btn-verify-otp').innerText = "מאמת...";
+        document.getElementById('btn-verify-otp').disabled = true;
+
+        window.confirmationResult.confirm(code).then((result) => {
+            // אם למשתמש החדש דרך SMS אין שם, נייצר לו שם זמני כדי שלא יקרוס לנו ה-DB
+            if (!result.user.displayName) {
+                const tempName = "משתמש_" + result.user.phoneNumber.slice(-4);
+                result.user.updateProfile({ displayName: tempName }).then(() => {
+                    currentUserName = tempName;
+                });
+            }
+        }).catch((error) => {
+            console.error("OTP Verification Error:", error);
+            alert("קוד שגוי, אנא נסה שוב.");
+            document.getElementById('btn-verify-otp').innerText = "אמת קוד והיכנס";
+            document.getElementById('btn-verify-otp').disabled = false;
+        });
+    });
+    
+    document.getElementById('btn-back-to-phone').addEventListener('click', () => {
+         document.getElementById('phone-input-section').classList.remove('hidden');
+         document.getElementById('otp-input-section').classList.add('hidden');
     });
 
     document.getElementById('btn-add-onboarding-city').addEventListener('click', () => {

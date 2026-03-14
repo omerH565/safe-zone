@@ -78,12 +78,29 @@
                     <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google Logo" style="width: 20px;">
                     התחבר עם Google
                 </button>
-                <button id="btn-facebook-login" class="btn" style="background-color: #1877F2; color: white; display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951"/>
-                    </svg>
-                    התחבר עם פייסבוק
-                </button>
+                
+                <div style="display: flex; align-items: center; margin: 10px 0;">
+                    <div style="flex-grow: 1; height: 1px; background-color: #4b5563;"></div>
+                    <span style="padding: 0 10px; color: #9ca3af; font-size: 0.9rem;">או באמצעות נייד</span>
+                    <div style="flex-grow: 1; height: 1px; background-color: #4b5563;"></div>
+                </div>
+
+                <div id="recaptcha-container"></div>
+                
+                <div id="phone-input-section">
+                    <div style="display: flex; gap: 8px; direction: ltr;">
+                        <span style="display: flex; align-items: center; background: #374151; padding: 0 10px; border-radius: 8px; border: 1px solid #4b5563;">+972</span>
+                        <input type="tel" id="phone-number" placeholder="501234567" class="input-field" style="margin-bottom: 0; flex-grow: 1;">
+                    </div>
+                    <button id="btn-send-sms" class="btn btn-blue" style="margin-top: 10px;">שלח קוד ב-SMS</button>
+                </div>
+
+                <div id="otp-input-section" class="hidden">
+                    <p style="text-align: right; margin-bottom: 5px; font-size: 0.9rem;">הזן את הקוד שקיבלת:</p>
+                    <input type="text" id="otp-code" placeholder="123456" class="input-field" style="text-align: center; letter-spacing: 5px; font-size: 1.2rem;">
+                    <button id="btn-verify-otp" class="btn btn-green" style="margin-top: 10px;">אמת קוד והיכנס</button>
+                    <button id="btn-back-to-phone" class="btn" style="background: transparent; border: 1px solid #4b5563; margin-top: 10px;">חזור למספר הטלפון</button>
+                </div>
             </div>
             
             <div id="setup-section" class="hidden">
