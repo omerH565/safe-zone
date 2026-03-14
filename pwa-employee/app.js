@@ -162,7 +162,7 @@ function initApp() {
         }
     });
 
-   document.getElementById('btn-google-login').addEventListener('click', () => { 
+    document.getElementById('btn-google-login').addEventListener('click', () => { 
         auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
             .catch(error => {
                 console.error("Google Login Error:", error);
@@ -252,7 +252,7 @@ function initApp() {
         }
     });
 
-   document.getElementById('btn-start').addEventListener('click', () => {
+    document.getElementById('btn-start').addEventListener('click', () => {
         const enteredName = document.getElementById('setup-name-input').value.trim();
         if (tempOnboardingCities.length === 0) {
             alert('חובה לבחור עיר אחת לפחות');
@@ -304,7 +304,7 @@ document.getElementById('btn-settings').addEventListener('click', () => {
     settingsModal.classList.remove('hidden');
 });
 
-// פונקציית העזר הגלובליות שנשארו במקום... (לא לגעת ב-btn-home, btn-enable-push, btn-add-settings-city, btn-close-settings, btn-logout אם הם פה אצלך)
+// --- פונקציות עזר גלובליות וניהול ממשק ---
 
 document.getElementById('btn-save-settings').addEventListener('click', () => {
     const enteredName = document.getElementById('settings-name-input').value.trim();
@@ -366,24 +366,6 @@ document.getElementById('btn-logout').addEventListener('click', () => {
     auth.signOut().then(() => {
         window.location.reload();
     });
-});
-
-document.getElementById('btn-save-settings').addEventListener('click', () => {
-    if (tempSettingsCities.length === 0) {
-        alert('חובה לבחור עיר מועדפת');
-        return;
-    }
-    
-    userCities = tempSettingsCities;
-    localStorage.setItem('safeZone_cities', JSON.stringify(userCities));
-    
-    socket.emit('update_settings', { 
-        userId: currentUserId, 
-        name: currentUserName, 
-        targetCities: userCities 
-    });
-    
-    settingsModal.classList.add('hidden');
 });
 
 document.getElementById('btn-dismiss-clear').addEventListener('click', () => {
@@ -457,7 +439,7 @@ socket.on('group_member_status', (data) => {
         groupDiv = document.createElement('div'); 
         groupDiv.id = `group-${groupId}`; 
         groupDiv.className = 'group-card';
-        // הוספנו חץ קליקבילי וכפתור עריכה ✏️
+        // הוספנו תפריט 3 נקודות בסגנון אייפון משמאל לפעמון 📱
         groupDiv.innerHTML = `
             <div class="group-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 8px; margin-bottom: 10px;">
                 <h4 onclick="toggleGroup('${groupId}')" style="margin: 0; color: #9ca3af; cursor: pointer; flex-grow: 1; display: flex; align-items: center; gap: 5px;">
@@ -532,7 +514,7 @@ window.pingGroup = async function(groupId) {
                 body: JSON.stringify({ 
                     groupId: groupId, 
                     senderName: currentUserName,
-                    senderId: currentUserId // מועבר מהעדכון הקודם כדי למנוע פוש עצמי
+                    senderId: currentUserId 
                 }) 
             });
             alert('התראה נשלחה!');
@@ -791,9 +773,6 @@ socket.on('clear_alert_for_user', (data) => {
         document.querySelector('.action-buttons').classList.add('hidden');
         document.getElementById('status-message').classList.add('hidden');
         
-        // הלוגיקה החדשה: מציגים ירוק רק אם זה חזל"ש אמיתי מהשטח (!isSync), 
-        // או אם באמת ניקינו מסך שהיה תקוע באזעקה פעילה. 
-        // אם זה סתם התחברות טרייה - תשאיר הכל מוסתר.
         if (!data.isSync || wasAlertActive) {
             document.getElementById('all-clear-banner').classList.remove('hidden');
         } else {
