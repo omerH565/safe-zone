@@ -101,38 +101,42 @@ function renderCityTags(citiesArray, containerId, removeCallback) {
 }
 
 window.checkSystemRequirements = function() {
-    const banner = document.getElementById('system-action-banner');
-    const textElement = document.getElementById('system-action-text');
-    const iconElement = document.getElementById('system-action-icon');
+    const installBanner = document.getElementById('banner-install');
+    const pushBanner = document.getElementById('banner-push');
     
-    if (!banner) return;
+    if (!installBanner || !pushBanner) return;
 
-    // 1. קודם בודקים אם חסרה התקנה למסך הבית (PWA)
+    // 1. ניהול כפתור ההתקנה (PWA)
     if (!isRunningAsPWA()) {
-        banner.style.display = 'flex';
-        iconElement.innerText = '📱';
-        textElement.innerText = 'לחץ כאן כדי להתקין את האפליקציה!';
-        banner.onclick = () => {
-            alert('להתקנה מלאה וקבלת התראות:\n\nבאייפון (Safari): לחץ על כפתור השיתוף ⍗ למטה, ואז בחר "הוסף למסך הבית".\n\nבאנדרואיד (Chrome): פתח את תפריט 3 הנקודות למעלה ובחר "התקן אפליקציה".');
+        installBanner.style.display = 'flex';
+        installBanner.onclick = async () => {
+            if (typeof deferredPrompt !== 'undefined' && deferredPrompt) {
+                // אנדרואיד / כרום: מקפיצים התקנה נייטיב
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBanner.style.display = 'none';
+                }
+                deferredPrompt = null;
+            } else {
+                // אייפון: הסבר ידני
+                alert('להתקנה מלאה:\n\nבאייפון (Safari): לחץ על ⍗ למטה, ואז "הוסף למסך הבית".\n\nבאנדרואיד (Chrome): פתח תפריט 3 נקודות למעלה ובחר "התקן אפליקציה".');
+            }
         };
-        return;
+    } else {
+        installBanner.style.display = 'none';
     }
 
-    // 2. אם מותקן, בודקים אם חסר אישור פוש
+    // 2. ניהול כפתור הפוש (Push Notifications)
     if ('Notification' in window && Notification.permission !== 'granted') {
-        banner.style.display = 'flex';
-        iconElement.innerText = '🔔';
-        textElement.innerText = 'התראות כבויות - לחץ כאן להפעלת PUSH';
-        banner.onclick = async () => {
+        pushBanner.style.display = 'flex';
+        pushBanner.onclick = async () => {
             await requestPushPermission();
-            // בודק שוב אחרי הלחיצה כדי להעלים את הבאנר אם האישור ניתן
-            setTimeout(checkSystemRequirements, 1000); 
+            setTimeout(checkSystemRequirements, 1000); // מעלים את הכפתור אם אושר
         };
-        return;
+    } else {
+        pushBanner.style.display = 'none';
     }
-
-    // 3. הכל מוגדר פיקס! מסתירים את הבאנר
-    banner.style.display = 'none';
 };
 
 function initApp() {

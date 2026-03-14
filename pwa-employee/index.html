@@ -140,11 +140,6 @@
     </div>
 
     <div class="container" id="main-app" class="hidden">
-        
-        <div id="system-action-banner" style="display: none; background: linear-gradient(90deg, #3b82f6, #2563eb); color: white; padding: 12px; margin-bottom: 15px; border-radius: 8px; text-align: center; font-size: 0.95rem; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); align-items: center; justify-content: center; gap: 8px;">
-            <span id="system-action-icon">💡</span>
-            <span id="system-action-text"></span>
-        </div>
 
         <div style="position: absolute; top: 20px; left: 20px; display: flex; gap: 15px; align-items: center;">
             <button id="btn-home" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0; margin: 0;">🏠</button>
@@ -152,6 +147,20 @@
         </div>
 
         <h2 id="greeting-title" style="text-align: right; margin-bottom: 20px; margin-top: 40px;"></h2>
+
+        <div id="system-requirements-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px;">
+            
+            <div id="banner-install" style="display: none; border: 1px solid #3b82f6; background: rgba(59, 130, 246, 0.05); color: #60a5fa; padding: 10px 15px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                <span style="font-size: 1.1rem;">📱</span>
+                <span>אנא התקן את האפליקציה</span>
+            </div>
+            
+            <div id="banner-push" style="display: none; border: 1px solid #eab308; background: rgba(234, 179, 8, 0.05); color: #facc15; padding: 10px 15px; border-radius: 8px; text-align: center; font-size: 0.85rem; cursor: pointer; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                <span style="font-size: 1.1rem;">🔔</span>
+                <span>אנא הפעל התראות</span>
+            </div>
+            
+        </div>
 
         <div id="alert-banner" class="hidden" style="background-color: #ef4444; padding: 20px; border-radius: 12px; margin-bottom: 30px; animation: pulse 1.5s infinite;">
             <h1 id="alert-title">🚨 אזעקה באזורך!</h1>
