@@ -769,16 +769,16 @@ socket.on('new_alert_for_user', (data) => {
 socket.on('ping_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
         document.getElementById('ping-banner').classList.remove('hidden');
-        document.getElementById('alert-banner').classList.add('hidden');
+        // התיקון העיצובי: לא מסתירים יותר את הבאנר של האזעקה!
         document.getElementById('all-clear-banner').classList.add('hidden');
         
         document.getElementById('ping-message').innerText = `${data.senderName} מבקש עדכון ב-${data.groupId}`;
         
+        // מציגים את כפתורי הדיווח (ירוק/אדום)
         document.querySelector('.action-buttons').classList.remove('hidden');
         
-        if (currentTimer) clearInterval(currentTimer);
-        if (stopwatchInterval) clearInterval(stopwatchInterval);
-        if (shelterInterval) clearInterval(shelterInterval);
+        // 🚨 התיקון הקריטי: מחקנו מפה את כל פקודות ה-clearInterval!
+        // ככה שאם המשתמש באמצע אזעקה עם טיימר רץ - הפינג לא יעצור לו את השעון בטעות.
     }
 });
 
