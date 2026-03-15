@@ -178,11 +178,20 @@
             
         </div>
 
-        <div class="action-buttons hidden" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
-            <button id="btn-safe" class="btn btn-green" style="flex: 1; padding: 15px; font-size: 1.1rem; margin: 0;">🛡️ במרחב מוגן</button>
-            <button id="btn-on-way" class="btn btn-red" style="flex: 1; padding: 15px; font-size: 1.1rem; margin: 0;">🏃 בדרך למרחב</button>
+        <div class="action-buttons hidden" style="display: flex; gap: 15px; justify-content: center; margin-bottom: 25px; direction: rtl;">
+            
+            <button id="btn-safe" class="btn-glowing green" style="flex: 1; padding: 15px; margin: 0; display: flex; align-items: center; gap: 10px; justify-content: center; direction: rtl;">
+                <span class="light-dot green"></span>
+                <span>במרחב מוגן</span>
+            </button>
+            
+            <button id="btn-on-way" class="btn-glowing red" style="flex: 1; padding: 15px; margin: 0; display: flex; align-items: center; gap: 10px; justify-content: center; direction: rtl;">
+                <span class="light-dot red"></span>
+                <span>בדרך למרחב</span>
+            </button>
+            
         </div>
-        
+
         <div id="alert-banner" class="hidden" style="background-color: #ef4444; padding: 20px; border-radius: 12px; margin-bottom: 30px; animation: pulse 1.5s infinite;">
             <h1 id="alert-title">🚨 אזעקה באזורך!</h1>
             <p id="timer" style="font-size: 1.2rem; font-weight: bold;">זמן להתגוננות: 90 שניות</p>
