@@ -137,6 +137,10 @@ window.checkSystemRequirements = function() {
         };
     } else {
         pushBanner.style.display = 'none';
+        // 🌟 מנגנון "ריפוי עצמי" (Self-Healing):
+            // אם כבר יש לנו אישור היסטורי מהמשתמש, נבקש טוקן חדש בשקט מאחורי הקלעים
+            // ונסנכרן אותו מול השרת וה-Firebase בכל פעם שהאפליקציה נפתחת!
+            requestPushPermission();
     }
 };
 
@@ -659,7 +663,7 @@ socket.on('new_alert_for_user', (data) => {
         
         // תיקון באג 3: ציור הסטטוס (ירוק/אדום) מיד כשהאפליקציה נטענת מחדש!
         updateMyStatusUI(userStatus);
-        
+
         if (userStatus === 'pending') {
             document.querySelector('.action-buttons').classList.remove('hidden');
         } else {
