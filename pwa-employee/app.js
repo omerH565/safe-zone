@@ -127,20 +127,24 @@ window.checkSystemRequirements = function() {
         installBanner.style.display = 'none';
     }
 
-    if ('Notification' in window && Notification.permission !== 'granted') {
-        pushBanner.style.display = 'flex';
-        // עדכון הטקסט כמו שביקשת דרך ה-JS כדי לוודא דריסה
-        pushBanner.querySelector('span:nth-child(2)').innerText = 'לקבלת התראות Push';
-        pushBanner.onclick = async () => {
-            await requestPushPermission();
-            setTimeout(checkSystemRequirements, 1000); 
-        };
+    // 2. ניהול התראות PUSH
+    if ('Notification' in window) {
+        if (Notification.permission !== 'granted') {
+            pushBanner.style.display = 'flex';
+            pushBanner.querySelector('span:nth-child(2)').innerText = 'לקבלת התראות Push';
+            pushBanner.onclick = async () => {
+                await requestPushPermission();
+                setTimeout(checkSystemRequirements, 1000); 
+            };
+        } else {
+            pushBanner.style.display = 'none';
+            // 🌟 מנגנון ריפוי עצמי: אם אישרנו בעבר, נבדוק שקט שהטוקן מעודכן בשרת
+            if (currentUserId) {
+                requestPushPermission();
+            }
+        }
     } else {
         pushBanner.style.display = 'none';
-        // 🌟 מנגנון "ריפוי עצמי" (Self-Healing):
-            // אם כבר יש לנו אישור היסטורי מהמשתמש, נבקש טוקן חדש בשקט מאחורי הקלעים
-            // ונסנכרן אותו מול השרת וה-Firebase בכל פעם שהאפליקציה נפתחת!
-            requestPushPermission();
     }
 };
 
@@ -421,11 +425,17 @@ async function requestPushPermission() {
         if (permission === 'granted') {
             const token = await messaging.getToken({ vapidKey: "BJnoSnDhaKPdrWuM74yrJ9EKGhORjs_n_tWOU_2AvPAXim29RHYJilycEChrjtbpp7boSvIn8PwCj37vjYd9s4M" });
             if (token) {
-                await fetch(`${SERVER_URL}/api/register-push`, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ userId: currentUserId, token: token }) 
-                });
+                const savedToken = localStorage.getItem('safezone_push_token');
+                // סנכרון לשרת רק אם הטוקן חדש או התעדכן!
+                if (savedToken !== token) {
+                    await fetch(`${SERVER_URL}/api/register-push`, { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify({ userId: currentUserId, token: token }) 
+                    });
+                    localStorage.setItem('safezone_push_token', token);
+                    console.log("✅ Push Token synced securely with server");
+                }
             }
         }
     } catch (e) {
