@@ -657,6 +657,9 @@ socket.on('new_alert_for_user', (data) => {
         
         const userStatus = data.status || 'pending'; 
         
+        // תיקון באג 3: ציור הסטטוס (ירוק/אדום) מיד כשהאפליקציה נטענת מחדש!
+        updateMyStatusUI(userStatus);
+        
         if (userStatus === 'pending') {
             document.querySelector('.action-buttons').classList.remove('hidden');
         } else {

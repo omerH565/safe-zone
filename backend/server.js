@@ -397,23 +397,31 @@ app.post('/api/webhook-alert', async (req, res) => {
         
         usersToAlert.forEach((userRecord, userId) => {
             const lastAlertData = userLastAlert.get(userId) || { time: 0, type: null };
+            // מחיקת הלוגיקה הקודמת והחלפתה במוח שמטפל גם בספאם וגם בהסלמה
             const timeSinceLast = now - lastAlertData.time;
             
-           // מחיקת מנגנון ה-Debounce (החסימה) והחלפתו בלוגיקת חופפים חכמה
-            let shouldAlert = true; // במטח חופף אנחנו תמיד מתריעים כדי להפעיל שעון מחדש
             let shouldResetStatus = false;
             
-            // האם זה אירוע חדש לגמרי? (עברו 12 דקות *וגם* לא היינו תחת נעילת התרעה מקדימה)
-            if (timeSinceLast >= 12 * 60 * 1000 && lastAlertData.type !== 'warning') {
+            if (timeSinceLast >= 12 * 60 * 1000) {
+                // אירוע חדש לגמרי - מאפסים סטטוסים
                 shouldResetStatus = true;
             } else {
-                // אנחנו במטח מתגלגל או תחת התרעה מקדימה פעילה - שומרים על הסטטוסים הירוקים/אדומים!
+                // אנחנו בתוך ה-12 דקות של אירוע קיים.
+                // תיקון באג 1 (ספאם פושים וטיימר): אם הבוט יורה את אותה התרעה שוב תוך פחות מדקה - חוסמים!
+                if (lastAlertData.type === alertType && timeSinceLast < 60 * 1000) {
+                    console.log(`[Debounce] Blocking bot spam for ${userRecord.name}`);
+                    return; 
+                }
+                // אם עברה דקה ויש מטח חופף, או שיש הסלמה (מקדימה -> אזעקה) - ממשיכים בלי לאפס סטטוס
                 shouldResetStatus = false; 
             }
 
-            // התיקון הקריטי: אם אנחנו כבר ב"התרעה מקדימה", אזעקה רגילה לא תדרוס אותנו!
-            // ככה המערכת לא תפעיל פתאום חזל"ש של 12 דקות, אלא תחכה לפיקוד העורף.
-            const finalAlertType = (lastAlertData.type === 'warning') ? 'warning' : alertType;
+            // תיקון באג 2 (הסלמה): אם היינו במקדימה ועכשיו יש אזעקה רגילה - דורסים לאזעקה!
+            // רק מונעים מצב הפוך (שמקדימה תדרוס אזעקה פעילה).
+            let finalAlertType = alertType;
+            if (lastAlertData.type === 'siren' && alertType === 'warning') {
+                finalAlertType = 'siren'; 
+            }
 
             userLastAlert.set(userId, { time: now, type: finalAlertType });
             
