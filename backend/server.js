@@ -72,7 +72,44 @@ const regionsMap = {
     "לוד": "השפלה",
     "רמלה": "השפלה"
 };
+// מילון זמנים בסיסי לפי אזורים (בשניות) - תקן פיקוד העורף
+const regionAlertTimes = {
+    "קו עימות": 0, // מיידי
+    "עוטף עזה": 15,
+    "גליל עליון": 15,
+    "גליל תחתון": 60,
+    "חיפה": 60,
+    "קריות": 60,
+    "כרמל": 60,
+    "שרון": 90,
+    "דן": 90,
+    "השפלה": 90,
+    "ירושלים": 90,
+    "באר שבע": 60,
+    "אילת": 180, // 3 דקות
+    "ערבה": 180
+};
 
+// מילון חריגים (Overrides): כאן אתה "דורס" זמנים לעיר ספציפית!
+// למשל, אם אתה רוצה שאילת תהיה דקה וחצי למרות שהיא באזור של 3 דקות:
+const citySpecificTimes = {
+    // "אילת": 90,
+    // "קריית שמונה": 0 
+};
+
+function getShelterTimeForCity(city) {
+    // 1. העיר נמצאת ברשימת החריגים? (למשל אילת המקוצרת)
+    if (citySpecificTimes[city] !== undefined) {
+        return citySpecificTimes[city];
+    }
+    // 2. לא חריגה? נחפש את האזור שלה וניקח את הזמן שלו
+    const region = regionsMap[city];
+    if (region && regionAlertTimes[region] !== undefined) {
+        return regionAlertTimes[region];
+    }
+    // 3. עיר שלא מוגדרת בשום מקום? ברירת מחדל בטוחה של דקה וחצי
+    return 90;
+}
 const SECRET_WEBHOOK_TOKEN = 'omer_safezone_secret_2026';
 
 function deriveAlertAreas(cities) {
@@ -221,12 +258,16 @@ io.on('connection', (socket) => {
             // בודק מה הסטטוס העדכני שלך בשרת
             const currentStatus = usersStatus.get(userId)?.status || 'pending'; 
             
+            // שולפים עיר ראשונה מההתרעה הקיימת או ברירת מחדל
+            const fallbackCity = (lastAlertData.cities && lastAlertData.cities.length > 0) ? lastAlertData.cities[0] : 'תל אביב - יפו';
+            
             socket.emit('new_alert_for_user', { 
                 userId: userId, 
                 cities: ['אזורך'], 
                 startTime: lastAlertData.time, 
                 isEarlyWarning: isEarlyWarning,
-                status: currentStatus // הזרקת הסטטוס
+                status: currentStatus,
+                timeToShelter: getShelterTimeForCity(fallbackCity) // שולב זמן דינמי לשחזור!
             });
         } else {
             // התיקון הקריטי למסכים תקועים: שולחים פקודת ניקוי עם דגל סנכרון שקט
@@ -393,19 +434,21 @@ app.post('/api/webhook-alert', async (req, res) => {
                 });
             });
             
+            // מציאת העיר הספציפית של המשתמש וחישוב הזמן החכם שלה
+            const matchedCity = cities.find(c => (userRecord.targetCities || []).includes(c)) || cities[0];
+            const shelterTimeSeconds = getShelterTimeForCity(matchedCity);
+
             io.emit('new_alert_for_user', { 
                 userId: userId, 
                 cities: cities, 
                 startTime: now, 
                 isEarlyWarning: isEarlyWarning, 
-                status: currentStatus // הזרקת הסטטוס
+                status: currentStatus,
+                timeToShelter: shelterTimeSeconds // הזרקת הזמן לאפליקציה!
             });
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
             if (userPushToken && currentStatus !== 'protected') {
-                // מוצא את העיר האמיתית של היוזר מתוך רשימת האזעקה!
-                const matchedCity = cities.find(c => (userRecord.targetCities || []).includes(c)) || cities[0];
-                
                 const title = isEarlyWarning ? '⚠️ התרעה מקדימה באזורך' : '🚨 אזעקה באזורך!';
                 admin.messaging().send({ 
                     notification: { 

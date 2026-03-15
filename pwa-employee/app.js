@@ -1,30 +1,31 @@
 // --- CTO Trick: Deferred Deep Linking (שמירת הקישור להתקנה) ---
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+});
+
 function preserveJoinLinkForInstall() {
     const urlParams = new URLSearchParams(window.location.search);
     const joinGroupId = urlParams.get('join');
     
     if (joinGroupId) {
-        // גיבוי 1: לאנדרואיד / דסקטופ (LocalStorage)
         localStorage.setItem('pending_join_group', joinGroupId);
-        
-        // גיבוי 2: לאייפון (iOS) - עריכה דינמית של המניפסט
         const manifestLink = document.getElementById('manifest-link');
         if (manifestLink) {
             fetch('manifest.json')
                 .then(res => res.json())
                 .then(manifest => {
-                    // מזריקים את הקישור לתוך כתובת ההתחלה של האפליקציה!
                     manifest.start_url = window.location.pathname + "?join=" + joinGroupId;
                     const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
                     manifestLink.href = URL.createObjectURL(blob);
-                    console.log("✅ Manifest dynamically updated with join link!");
                 })
                 .catch(e => console.error("Error updating manifest", e));
         }
     }
 }
 
-// נפעיל מיד כשהקובץ עולה כדי לתפוס את הקישור לפני ההתקנה
 preserveJoinLinkForInstall();
 
 const SERVER_URL = 'https://safezone-api-uozd.onrender.com';
@@ -73,6 +74,66 @@ const mainApp = document.getElementById('main-app');
 const greetingTitle = document.getElementById('greeting-title');
 const groupsList = document.getElementById('groups-list');
 
+// הוספת פונקציית עדכון ה-Dashboard האישי
+window.updateMyStatusUI = function(status) {
+    const dot = document.getElementById('my-status-dot');
+    const text = document.getElementById('my-status-text');
+    if (!dot || !text) return;
+
+    dot.className = 'status-dot'; // ניקוי קלאסים
+    
+    if (status === 'protected') {
+        dot.classList.add('protected');
+        text.innerText = 'במרחב מוגן';
+        text.style.color = '#22c55e';
+    } else if (status === 'on_the_way') {
+        dot.classList.add('on_the_way');
+        text.innerText = 'בדרך למרחב';
+        text.style.color = '#ef4444'; 
+    } else {
+        dot.classList.add('pending');
+        text.innerText = 'לא נבחר';
+        text.style.color = '#9ca3af';
+    }
+};
+
+window.checkSystemRequirements = function() {
+    const installBanner = document.getElementById('banner-install');
+    const pushBanner = document.getElementById('banner-push');
+    
+    if (!installBanner || !pushBanner) return;
+
+    if (!isRunningAsPWA()) {
+        installBanner.style.display = 'flex';
+        installBanner.onclick = async () => {
+            if (typeof deferredPrompt !== 'undefined' && deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBanner.style.display = 'none';
+                }
+                deferredPrompt = null;
+            } else {
+                alert('להתקנה מלאה:\n\nבאייפון (Safari): לחץ על כפתור השיתוף ⍗ למטה, ואז בחר "הוסף למסך הבית".\n\nבאנדרואיד (Chrome): פתח את תפריט 3 הנקודות למעלה ובחר "התקן אפליקציה".');
+            }
+        };
+    } else {
+        installBanner.style.display = 'none';
+    }
+
+    if ('Notification' in window && Notification.permission !== 'granted') {
+        pushBanner.style.display = 'flex';
+        // עדכון הטקסט כמו שביקשת דרך ה-JS כדי לוודא דריסה
+        pushBanner.querySelector('span:nth-child(2)').innerText = 'לקבלת התראות Push';
+        pushBanner.onclick = async () => {
+            await requestPushPermission();
+            setTimeout(checkSystemRequirements, 1000); 
+        };
+    } else {
+        pushBanner.style.display = 'none';
+    }
+};
+
 function renderCityTags(citiesArray, containerId, removeCallback) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
@@ -100,47 +161,7 @@ function renderCityTags(citiesArray, containerId, removeCallback) {
     });
 }
 
-window.checkSystemRequirements = function() {
-    const installBanner = document.getElementById('banner-install');
-    const pushBanner = document.getElementById('banner-push');
-    
-    if (!installBanner || !pushBanner) return;
-
-    // 1. ניהול כפתור ההתקנה (PWA)
-    if (!isRunningAsPWA()) {
-        installBanner.style.display = 'flex';
-        installBanner.onclick = async () => {
-            if (typeof deferredPrompt !== 'undefined' && deferredPrompt) {
-                // אנדרואיד / כרום: מקפיצים התקנה נייטיב
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    installBanner.style.display = 'none';
-                }
-                deferredPrompt = null;
-            } else {
-                // אייפון: הסבר ידני
-                alert('להתקנה מלאה:\n\nבאייפון (Safari): לחץ על ⍗ למטה, ואז "הוסף למסך הבית".\n\nבאנדרואיד (Chrome): פתח תפריט 3 נקודות למעלה ובחר "התקן אפליקציה".');
-            }
-        };
-    } else {
-        installBanner.style.display = 'none';
-    }
-
-    // 2. ניהול כפתור הפוש (Push Notifications)
-    if ('Notification' in window && Notification.permission !== 'granted') {
-        pushBanner.style.display = 'flex';
-        pushBanner.onclick = async () => {
-            await requestPushPermission();
-            setTimeout(checkSystemRequirements, 1000); // מעלים את הכפתור אם אושר
-        };
-    } else {
-        pushBanner.style.display = 'none';
-    }
-};
-
 function initApp() {
-    // התיקון הקריטי: שואבים את הקישור או מה-URL הנוכחי או מהזיכרון שהשארנו לפני ההתקנה
     const urlParams = new URLSearchParams(window.location.search);
     const joinGroupId = urlParams.get('join') || localStorage.getItem('pending_join_group');
     
@@ -188,7 +209,6 @@ function initApp() {
                 }
                 
                 connectToServer();
-                
                 checkSystemRequirements();
             }
         } else {
@@ -207,13 +227,9 @@ function initApp() {
             }); 
     });
     
-    // --- מערכת התחברות ב-SMS במקום פייסבוק ---
-    
     window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
         'size': 'invisible',
-        'callback': (response) => {
-            // הריקאפצ'ה נפתרה
-        }
+        'callback': (response) => {}
     });
 
     document.getElementById('btn-send-sms').addEventListener('click', () => {
@@ -257,7 +273,6 @@ function initApp() {
         document.getElementById('btn-verify-otp').disabled = true;
 
         window.confirmationResult.confirm(code).then((result) => {
-            // אם למשתמש החדש דרך SMS אין שם, נייצר לו שם זמני כדי שלא יקרוס לנו ה-DB
             if (!result.user.displayName) {
                 const tempName = "משתמש_" + result.user.phoneNumber.slice(-4);
                 result.user.updateProfile({ displayName: tempName }).then(() => {
@@ -314,13 +329,11 @@ function initApp() {
         }
         
         connectToServer();
-        
         checkSystemRequirements();
     });
-} // סגירת פונקציית initApp() - שומרים עליה!
+} 
 
 document.getElementById('btn-settings').addEventListener('click', () => {
-    // מציג את השם הנוכחי בשדה (ומעלים אם זה שם רנדומלי מה-SMS)
     document.getElementById('settings-name-input').value = (currentUserName && currentUserName.startsWith('משתמש_')) ? '' : currentUserName;
     
     tempSettingsCities = [...userCities]; 
@@ -332,7 +345,11 @@ document.getElementById('btn-settings').addEventListener('click', () => {
     settingsModal.classList.remove('hidden');
 });
 
-// --- פונקציות עזר גלובליות וניהול ממשק ---
+// פתיחה מחדש של כפתורי הסטטוס בשגרה
+document.getElementById('btn-manual-status').addEventListener('click', () => {
+    document.querySelector('.action-buttons').classList.remove('hidden');
+    document.getElementById('all-clear-banner').classList.add('hidden');
+});
 
 document.getElementById('btn-save-settings').addEventListener('click', () => {
     const enteredName = document.getElementById('settings-name-input').value.trim();
@@ -357,18 +374,8 @@ document.getElementById('btn-save-settings').addEventListener('click', () => {
         targetCities: userCities 
     });
     
-    // מעדכן את כותרת הברכה במסך הראשי מיד עם השמירה
     document.getElementById('greeting-title').innerText = `שלום, ${currentUserName}`;
-    
     settingsModal.classList.add('hidden');
-});
-
-document.getElementById('btn-manual-status').addEventListener('click', () => {
-    // חושף את כפתורי הדיווח (הירוק והאדום)
-    document.querySelector('.action-buttons').classList.remove('hidden');
-    // מסתיר את הודעות הסטטוס או החזל"ש הקודמות
-    document.getElementById('status-message').classList.add('hidden');
-    document.getElementById('all-clear-banner').classList.add('hidden');
 });
 
 document.getElementById('btn-add-settings-city').addEventListener('click', () => {
@@ -435,7 +442,6 @@ function handleJoinGroup(groupId) {
         alert(`הצטרפת בהצלחה לקבוצה: ${groupId}`);
     }
     
-    // מנקים הכל כדי שלא יצורף שוב בטעות ברענון
     localStorage.removeItem('pending_join_group');
     window.history.replaceState({}, document.title, window.location.pathname);
 }
@@ -454,6 +460,11 @@ function connectToServer() {
 socket.on('group_member_status', (data) => {
     const { userId, name, status, groupId } = data;
     
+    // מעדכן את הפאנל האישי למעלה ברגע שהשרת מחזיר את הסטטוס שלנו!
+    if (userId === currentUserId) {
+        updateMyStatusUI(status);
+    }
+    
     const noGroupsMsg = document.getElementById('no-groups-msg');
     if (noGroupsMsg) {
         noGroupsMsg.style.display = 'none';
@@ -464,7 +475,6 @@ socket.on('group_member_status', (data) => {
         groupDiv = document.createElement('div'); 
         groupDiv.id = `group-${groupId}`; 
         groupDiv.className = 'group-card';
-        // הוספנו תפריט 3 נקודות בסגנון אייפון משמאל לפעמון 📱
         groupDiv.innerHTML = `
             <div class="group-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 8px; margin-bottom: 10px;">
                 <h4 onclick="toggleGroup('${groupId}')" style="margin: 0; color: #9ca3af; cursor: pointer; flex-grow: 1; display: flex; align-items: center; gap: 5px;">
@@ -507,7 +517,6 @@ socket.on('group_member_status', (data) => {
     const statusClass = status === 'pending' ? 'pending' : status;
     const displayName = userId === currentUserId ? `${name} (אני)` : name;
     
-    // הוספנו את כפתור ה-X שמוסתר כברירת מחדל
     memberDiv.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px;">
             <button class="delete-member-btn hidden" onclick="removeMember('${userId}', '${groupId}', '${displayName}')" style="background: #ef4444; color: white; border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; cursor: pointer; display: none; align-items: center; justify-content: center; font-weight: bold;">✕</button>
@@ -562,11 +571,11 @@ window.toggleGroup = function(groupId) {
 };
 
 window.toggleDropdown = function(groupId, event) {
-    event.stopPropagation(); // מונע סגירה מיידית של התפריט
+    event.stopPropagation(); 
     const dropdown = document.getElementById(`dropdown-${groupId}`);
     const isCurrentlyOpen = dropdown.style.display === 'flex';
     
-    closeAllDropdowns(); // סוגר תפריטים של קבוצות אחרות אם נשארו פתוחים
+    closeAllDropdowns(); 
     
     if (!isCurrentlyOpen) {
         dropdown.style.display = 'flex';
@@ -580,7 +589,6 @@ window.closeAllDropdowns = function() {
     });
 };
 
-// מאזין גלובלי - סוגר את התפריט אם המשתמש לוחץ בכל מקום אחר במסך
 document.addEventListener('click', () => {
     closeAllDropdowns();
 });
@@ -589,7 +597,6 @@ window.toggleEditMode = function(groupId) {
     const container = document.getElementById(`members-${groupId}`);
     const deleteBtns = container.querySelectorAll('.delete-member-btn');
     
-    // אם התיקייה סגורה, נפתח אותה קודם כדי שהמשתמש יראה מה הוא עורך
     if (container.style.display === 'none') {
         toggleGroup(groupId);
     }
@@ -614,12 +621,10 @@ window.removeMember = async function(targetUserId, groupId, displayName) {
     }
 };
 
-// האזנות לאירועי מחיקה
 socket.on('member_removed', (data) => {
     const memberDiv = document.getElementById(`member-${data.userId}-${data.groupId}`);
     if (memberDiv) memberDiv.remove();
     
-    // מעלים את הקבוצה לגמרי אם היא נשארה ריקה
     const membersContainer = document.getElementById(`members-${data.groupId}`);
     if (membersContainer && membersContainer.children.length === 0) {
         const groupDiv = document.getElementById(`group-${data.groupId}`);
@@ -632,7 +637,7 @@ socket.on('you_were_removed', (data) => {
         userGroups = userGroups.filter(g => g !== data.groupId);
         localStorage.setItem('safeZone_groups', JSON.stringify(userGroups));
         alert(`הוסרת מקבוצת ${data.groupId}`);
-        window.location.reload(); // טוען מחדש כדי לאתחל את התצוגה ללא הקבוצה
+        window.location.reload(); 
     }
 });
 
@@ -648,24 +653,23 @@ socket.on('new_alert_for_user', (data) => {
         
         if (userStatus === 'pending') {
             document.querySelector('.action-buttons').classList.remove('hidden');
-            document.getElementById('status-message').classList.add('hidden');
         } else {
             document.querySelector('.action-buttons').classList.add('hidden');
-            document.getElementById('status-message').classList.remove('hidden');
         }
 
         if (data.isEarlyWarning) {
             document.getElementById('alert-title').innerText = "⚠️ התרעה מקדימה באזורך";
             document.getElementById('alert-banner').style.backgroundColor = "#eab308"; 
-            // שינוי טקסט ללוגיקת איום רחוק
             document.getElementById('shelter-instruction-text').innerText = "שמור על עצמך. יש להישאר במרחב המוגן עד לקבלת הודעת שחרור מפיקוד העורף.";
             startStopwatch(data.startTime);
         } else {
             document.getElementById('alert-title').innerText = "🚨 אזעקה באזורך!";
             document.getElementById('alert-banner').style.backgroundColor = "#ef4444"; 
-            // החזרת טקסט ללוגיקת איום קרוב
-            document.getElementById('shelter-instruction-text').innerText = "שמור על עצמך והישאר במרחב המוגן 12 דקות.";
-            startTimer(90, data.startTime);
+            
+            // המוח מתחבר: מקבלים את הזמן המדויק מהשרת
+            const shelterTime = data.timeToShelter || 90;
+            document.getElementById('shelter-instruction-text').innerText = `שמור על עצמך והישאר במרחב המוגן 12 דקות.`;
+            startTimer(shelterTime, data.startTime);
         }
     }
 });
@@ -679,7 +683,6 @@ socket.on('ping_alert_for_user', (data) => {
         document.getElementById('ping-message').innerText = `${data.senderName} מבקש עדכון ב-${data.groupId}`;
         
         document.querySelector('.action-buttons').classList.remove('hidden');
-        document.getElementById('status-message').classList.add('hidden');
         
         if (currentTimer) clearInterval(currentTimer);
         if (stopwatchInterval) clearInterval(stopwatchInterval);
@@ -704,18 +707,8 @@ async function reportStatus(status) {
         if (res.ok) {
             document.querySelector('.action-buttons').classList.add('hidden');
             document.getElementById('ping-banner').classList.add('hidden');
-            
-            const statusDiv = document.getElementById('status-message');
-            const statusText = document.getElementById('final-status-text');
-            statusDiv.classList.remove('hidden');
-            
-            if(status === 'protected') {
-                statusText.innerText = "✅ דווחת כמוגן!"; 
-                statusText.style.color = "#22c55e";
-            } else {
-                statusText.innerText = "🏃‍♂️ דווחת כבדרך. עדכן כשתגיע!"; 
-                statusText.style.color = "#ef4444";
-            }
+            // העדכון המיידי של הממשק הויזואלי!
+            updateMyStatusUI(status);
         }
     } catch (e) {
         console.error("Status error", e);
@@ -732,9 +725,7 @@ function updateShelterDisplay(startTimeMs, displayElement) {
 function startShelterStopwatch(shelterStartTimeMs) {
     if (shelterInterval) clearInterval(shelterInterval);
     const timerDisplay = document.getElementById('timer');
-    
     document.getElementById('alert-banner').style.animation = 'none';
-    
     updateShelterDisplay(shelterStartTimeMs, timerDisplay);
     
     shelterInterval = setInterval(() => {
@@ -789,14 +780,12 @@ function startStopwatch(startTimeMs) {
 
 socket.on('clear_alert_for_user', (data) => {
     if(data.userId === currentUserId) {
-        // בודקים האם מסך האזעקה או הפינג היו בכלל דלוקים הרגע?
         const wasAlertActive = !document.getElementById('alert-banner').classList.contains('hidden') || 
                                !document.getElementById('ping-banner').classList.contains('hidden');
 
         document.getElementById('alert-banner').classList.add('hidden');
         document.getElementById('ping-banner').classList.add('hidden');
         document.querySelector('.action-buttons').classList.add('hidden');
-        document.getElementById('status-message').classList.add('hidden');
         
         if (!data.isSync || wasAlertActive) {
             document.getElementById('all-clear-banner').classList.remove('hidden');

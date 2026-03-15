@@ -143,12 +143,18 @@
             <button id="btn-settings" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; padding: 0; margin: 0;">⚙️</button>
         </div>
 
-        <h2 id="greeting-title" style="text-align: right; margin-bottom: 5px; margin-top: 40px;"></h2>
+        <h2 id="greeting-title" style="text-align: right; margin-bottom: 10px; margin-top: 40px;"></h2>
         
-        <div style="text-align: right; margin-bottom: 25px;">
-            <button id="btn-manual-status" style="background: none; border: 1px solid #3b82f6; color: #3b82f6; padding: 6px 15px; border-radius: 6px; font-size: 0.95rem; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s;">
-                <span>✏️</span> עדכן מצב נוכחי
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: #1f2937; padding: 12px 15px; border-radius: 8px; border: 1px solid #374151;">
+            <button id="btn-manual-status" style="background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; color: #3b82f6; padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all 0.2s;">
+                <span>✏️</span> עדכן מצב
             </button>
+            
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="my-status-text" style="font-weight: bold; font-size: 1.05rem; color: #9ca3af;">לא נבחר</span>
+                <span id="my-status-dot" class="status-dot pending" style="position: relative; margin: 0; width: 14px; height: 14px; box-shadow: 0 0 8px rgba(0,0,0,0.3);"></span>
+                <span style="color: #6b7280; font-size: 0.95rem;">:סטטוס</span>
+            </div>
         </div>
 
         <div id="system-requirements-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px;">
@@ -168,6 +174,7 @@
         <div id="alert-banner" class="hidden" style="background-color: #ef4444; padding: 20px; border-radius: 12px; margin-bottom: 30px; animation: pulse 1.5s infinite;">
             <h1 id="alert-title">🚨 אזעקה באזורך!</h1>
             <p id="timer" style="font-size: 1.2rem; font-weight: bold;">זמן להתגוננות: 90 שניות</p>
+            <p id="shelter-instruction-text" style="margin-top: 10px; font-size: 1.1rem; font-weight: bold; color: white;"></p>
         </div>
 
         <div id="ping-banner" class="hidden" style="background-color: #3b82f6; padding: 20px; border-radius: 12px; margin-bottom: 30px; animation: pulse 1.5s infinite;">
@@ -184,11 +191,6 @@
         <div class="action-buttons hidden" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
             <button id="btn-safe" class="btn btn-green" style="flex: 1; padding: 15px; font-size: 1.1rem; margin: 0;">🛡️ במרחב מוגן</button>
             <button id="btn-on-way" class="btn btn-red" style="flex: 1; padding: 15px; font-size: 1.1rem; margin: 0;">🏃 בדרך למרחב</button>
-        </div>
-
-        <div id="status-message" class="hidden">
-            <h2 id="final-status-text"></h2>
-            <p id="shelter-instruction-text">שמור על עצמך והישאר במרחב המוגן 12 דקות.</p>
         </div>
 
         <div id="groups-container" style="margin-top: 30px; text-align: right;">
