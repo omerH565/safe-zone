@@ -399,21 +399,23 @@ app.post('/api/webhook-alert', async (req, res) => {
             const lastAlertData = userLastAlert.get(userId) || { time: 0, type: null };
             const timeSinceLast = now - lastAlertData.time;
             
-            let shouldAlert = false;
+           // מחיקת מנגנון ה-Debounce (החסימה) והחלפתו בלוגיקת חופפים חכמה
+            let shouldAlert = true; // במטח חופף אנחנו תמיד מתריעים כדי להפעיל שעון מחדש
             let shouldResetStatus = false;
             
-            if (timeSinceLast >= 12 * 60 * 1000) {
-                shouldAlert = true;
+            // האם זה אירוע חדש לגמרי? (עברו 12 דקות *וגם* לא היינו תחת נעילת התרעה מקדימה)
+            if (timeSinceLast >= 12 * 60 * 1000 && lastAlertData.type !== 'warning') {
                 shouldResetStatus = true;
-            } else if (lastAlertData.type === 'warning' && alertType === 'siren') {
-                shouldAlert = true;
-                shouldResetStatus = false; 
             } else {
-                console.log(`[Debounce] Skipping alert for ${userRecord.name}`);
-                return;
+                // אנחנו במטח מתגלגל או תחת התרעה מקדימה פעילה - שומרים על הסטטוסים הירוקים/אדומים!
+                shouldResetStatus = false; 
             }
 
-            userLastAlert.set(userId, { time: now, type: alertType });
+            // התיקון הקריטי: אם אנחנו כבר ב"התרעה מקדימה", אזעקה רגילה לא תדרוס אותנו!
+            // ככה המערכת לא תפעיל פתאום חזל"ש של 12 דקות, אלא תחכה לפיקוד העורף.
+            const finalAlertType = (lastAlertData.type === 'warning') ? 'warning' : alertType;
+
+            userLastAlert.set(userId, { time: now, type: finalAlertType });
             
             // התיקון הכירורגי: מוחקים את ההגנה של החזל"ש כדי שהטסט הבא יעבוד חלק
             userLastClearTime.delete(userId); 

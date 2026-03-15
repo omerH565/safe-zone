@@ -674,7 +674,7 @@ socket.on('new_alert_for_user', (data) => {
             
             // המוח מתחבר: מקבלים את הזמן המדויק מהשרת
             const shelterTime = data.timeToShelter || 90;
-            document.getElementById('shelter-instruction-text').innerText = `שמור על עצמך והישאר במרחב המוגן 12 דקות.`;
+            document.getElementById('shelter-instruction-text').innerText = `שמור על עצמך. יש להישאר במרחב המוגן עד הודעת פיקוד העורף.`;
             startTimer(shelterTime, data.startTime);
         }
     }
@@ -793,6 +793,9 @@ socket.on('clear_alert_for_user', (data) => {
         document.getElementById('ping-banner').classList.add('hidden');
         document.querySelector('.action-buttons').classList.add('hidden');
         
+        // התיקון הכירורגי: מאפס את הנקודה הזוהרת למעלה חזרה ל"לא נבחר" (אפור)
+        updateMyStatusUI('pending');
+
         if (!data.isSync || wasAlertActive) {
             document.getElementById('all-clear-banner').classList.remove('hidden');
         } else {
