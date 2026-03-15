@@ -264,7 +264,7 @@ io.on('connection', (socket) => {
             socket.emit('new_alert_for_user', { 
                 userId: userId, 
                 cities: ['אזורך'], 
-                startTime: lastAlertData.time, 
+                startTime: lastAlertData.originalTime || lastAlertData.time, 
                 isEarlyWarning: isEarlyWarning,
                 status: currentStatus,
                 timeToShelter: getShelterTimeForCity(fallbackCity) // שולב זמן דינמי לשחזור!
@@ -403,27 +403,29 @@ app.post('/api/webhook-alert', async (req, res) => {
             let shouldResetStatus = false;
             
             if (timeSinceLast >= 12 * 60 * 1000) {
-                // אירוע חדש לגמרי - מאפסים סטטוסים
+                // אירוע חדש לגמרי
                 shouldResetStatus = true;
             } else {
-                // אנחנו בתוך ה-12 דקות של אירוע קיים.
-                // תיקון באג 1 (ספאם פושים וטיימר): אם הבוט יורה את אותה התרעה שוב תוך פחות מדקה - חוסמים!
                 if (lastAlertData.type === alertType && timeSinceLast < 60 * 1000) {
                     console.log(`[Debounce] Blocking bot spam for ${userRecord.name}`);
                     return; 
                 }
-                // אם עברה דקה ויש מטח חופף, או שיש הסלמה (מקדימה -> אזעקה) - ממשיכים בלי לאפס סטטוס
                 shouldResetStatus = false; 
             }
 
-            // תיקון באג 2 (הסלמה): אם היינו במקדימה ועכשיו יש אזעקה רגילה - דורסים לאזעקה!
-            // רק מונעים מצב הפוך (שמקדימה תדרוס אזעקה פעילה).
             let finalAlertType = alertType;
             if (lastAlertData.type === 'siren' && alertType === 'warning') {
                 finalAlertType = 'siren'; 
             }
 
-            userLastAlert.set(userId, { time: now, type: finalAlertType });
+            // 👇 התיקון הגאוני: שומרים את זמן ההתחלה המקורי של המטח הראשון!
+            const originalTime = shouldResetStatus ? now : (lastAlertData.originalTime || lastAlertData.time || now);
+
+            userLastAlert.set(userId, { 
+                time: now,                   // מתעדכן תמיד כדי להאריך את האירוע מול פיקוד העורף
+                originalTime: originalTime,  // הזמן המקורי הקפוא לשעון הרציף באפליקציה
+                type: finalAlertType 
+            });
             
             // התיקון הכירורגי: מוחקים את ההגנה של החזל"ש כדי שהטסט הבא יעבוד חלק
             userLastClearTime.delete(userId); 
@@ -451,7 +453,7 @@ app.post('/api/webhook-alert', async (req, res) => {
             io.emit('new_alert_for_user', { 
                 userId: userId, 
                 cities: cities, 
-                startTime: now, 
+                startTime: originalTime, 
                 isEarlyWarning: isEarlyWarning, 
                 status: currentStatus,
                 timeToShelter: shelterTimeSeconds // הזרקת הזמן לאפליקציה!
