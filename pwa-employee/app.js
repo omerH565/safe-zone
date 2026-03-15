@@ -85,15 +85,21 @@ window.updateMyStatusUI = function(status) {
     if (status === 'protected') {
         dot.classList.add('protected');
         text.innerText = 'במרחב מוגן';
-        text.style.color = '#22c55e';
+        text.style.color = '#22c55e'; // ירוק טיילוינד
+        dot.style.backgroundColor = '#22c55e';
+        dot.style.boxShadow = '0 0 12px #22c55e'; // 🌟 אפקט הזוהר הירוק!
     } else if (status === 'on_the_way') {
         dot.classList.add('on_the_way');
         text.innerText = 'בדרך למרחב';
-        text.style.color = '#ef4444'; 
+        text.style.color = '#ef4444'; // אדום
+        dot.style.backgroundColor = '#ef4444';
+        dot.style.boxShadow = '0 0 12px #ef4444'; // 🌟 אפקט הזוהר האדום!
     } else {
         dot.classList.add('pending');
         text.innerText = 'לא נבחר';
-        text.style.color = '#9ca3af';
+        text.style.color = '#9ca3af'; // אפור
+        dot.style.backgroundColor = '#4b5563';
+        dot.style.boxShadow = 'none'; // ללא זוהר במצב המתנה
     }
 };
 
