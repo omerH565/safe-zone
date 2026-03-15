@@ -408,6 +408,64 @@ document.getElementById('btn-close-settings').addEventListener('click', () => {
     settingsModal.classList.add('hidden');
 });
 
+document.getElementById('btn-refresh-push').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-refresh-push');
+    const originalText = btn.innerHTML;
+    
+    // חיווי ויזואלי של טעינה
+    btn.innerHTML = '<span>⏳</span> מחדש חיבור מול השרת...';
+    btn.disabled = true;
+
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            // 1. מוחקים את הטוקן הישן והתקוע
+            await messaging.deleteToken();
+            console.log("🗑️ Old push token deleted");
+            
+            // 2. מושכים טוקן חדש ונקי
+            const newToken = await messaging.getToken({ vapidKey: "BJnoSnDhaKPdrWuM74yrJ9EKGhORjs_n_tWOU_2AvPAXim29RHYJilycEChrjtbpp7boSvIn8PwCj37vjYd9s4M" });
+            
+            if (newToken) {
+                console.log("✨ Fresh token generated:", newToken.substring(0, 15) + "...");
+                
+                // 3. מסנכרנים מול השרת שלנו
+                await fetch(`${SERVER_URL}/api/register-push`, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ userId: currentUserId, token: newToken }) 
+                });
+                
+                localStorage.setItem('safezone_push_token', newToken);
+                
+                // 4. חיווי הצלחה ירוק
+                btn.innerHTML = '<span>✅</span> החיבור חודש בהצלחה!';
+                btn.style.background = 'rgba(34, 197, 94, 0.1)'; 
+                btn.style.borderColor = '#22c55e';
+                btn.style.color = '#22c55e';
+                
+                // מחזירים למצב הרגיל אחרי 3 שניות
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.style.background = 'rgba(59, 130, 246, 0.1)';
+                    btn.style.borderColor = '#3b82f6';
+                    btn.style.color = '#3b82f6';
+                    btn.disabled = false;
+                }, 3000);
+            }
+        } else {
+            alert('הדפדפן שלך חוסם התראות. עליך לאפשר התראות בהגדרות הדפדפן כדי להשתמש בפיצ׳ר זה.');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    } catch (e) {
+        console.error("Error force-refreshing push:", e);
+        alert('שגיאה ברענון ההתראות. אנא נסה שוב.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+});
+
 document.getElementById('btn-logout').addEventListener('click', () => { 
     auth.signOut().then(() => {
         window.location.reload();
