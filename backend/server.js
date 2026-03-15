@@ -460,15 +460,26 @@ app.post('/api/webhook-alert', async (req, res) => {
             });
 
             const userPushToken = userRecord.pushToken || userPushTokens.get(userId);
+            
+            // 🚨 רדאר: מדפיסים את המצב של המשתמש לפני השליחה!
+            console.log(`[Push Check] User: ${userRecord.name} | Status: ${currentStatus} | HasToken: ${!!userPushToken}`);
+
             if (userPushToken && currentStatus !== 'protected') {
                 const title = isEarlyWarning ? '⚠️ התרעה מקדימה באזורך' : '🚨 אזעקה באזורך!';
+                
+                console.log(`[Push Send] Attempting to send push to ${userRecord.name}...`);
+                
                 admin.messaging().send({ 
                     notification: { 
                         title: title, 
                         body: `היכנסו למרחב מוגן. אזור: ${matchedCity}` 
                     }, 
                     token: userPushToken 
-                }).catch(err => console.error(err));
+                }).then(response => {
+                    console.log(`[Push Success] ✅ Push delivered to ${userRecord.name}`);
+                }).catch(err => {
+                    console.error(`[Push ERROR] ❌ Firebase rejected push for ${userRecord.name}:`, err.message);
+                });
             }
         });
 

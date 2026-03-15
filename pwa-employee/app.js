@@ -425,21 +425,21 @@ async function requestPushPermission() {
         if (permission === 'granted') {
             const token = await messaging.getToken({ vapidKey: "BJnoSnDhaKPdrWuM74yrJ9EKGhORjs_n_tWOU_2AvPAXim29RHYJilycEChrjtbpp7boSvIn8PwCj37vjYd9s4M" });
             if (token) {
-                const savedToken = localStorage.getItem('safezone_push_token');
-                // סנכרון לשרת רק אם הטוקן חדש או התעדכן!
-                if (savedToken !== token) {
-                    await fetch(`${SERVER_URL}/api/register-push`, { 
-                        method: 'POST', 
-                        headers: { 'Content-Type': 'application/json' }, 
-                        body: JSON.stringify({ userId: currentUserId, token: token }) 
-                    });
-                    localStorage.setItem('safezone_push_token', token);
-                    console.log("✅ Push Token synced securely with server");
-                }
+                console.log("🔔 Retrieved Token from Google:", token.substring(0, 15) + "...");
+                // 💥 דוחפים את הטוקן לשרת בכוח בכל ריענון כדי לוודא שפיירסטור מעודכן!
+                await fetch(`${SERVER_URL}/api/register-push`, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ userId: currentUserId, token: token }) 
+                });
+                localStorage.setItem('safezone_push_token', token);
+                console.log("✅ Push Token FORCE-SYNCED with server");
             }
+        } else {
+            console.warn("❌ Push permission was denied by user");
         }
     } catch (e) {
-        console.error("Error push permission:", e);
+        console.error("❌ Error getting push token:", e);
     }
 }
 
