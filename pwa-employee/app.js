@@ -425,15 +425,17 @@ async function requestPushPermission() {
         if (permission === 'granted') {
             const token = await messaging.getToken({ vapidKey: "BJnoSnDhaKPdrWuM74yrJ9EKGhORjs_n_tWOU_2AvPAXim29RHYJilycEChrjtbpp7boSvIn8PwCj37vjYd9s4M" });
             if (token) {
-                console.log("🔔 Retrieved Token from Google:", token.substring(0, 15) + "...");
-                // 💥 דוחפים את הטוקן לשרת בכוח בכל ריענון כדי לוודא שפיירסטור מעודכן!
-                await fetch(`${SERVER_URL}/api/register-push`, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ userId: currentUserId, token: token }) 
-                });
-                localStorage.setItem('safezone_push_token', token);
-                console.log("✅ Push Token FORCE-SYNCED with server");
+                const savedToken = localStorage.getItem('safezone_push_token');
+                // התיקון: מעדכן את השרת רק אם הטוקן השתנה או חסר!
+                if (savedToken !== token) {
+                    await fetch(`${SERVER_URL}/api/register-push`, { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify({ userId: currentUserId, token: token }) 
+                    });
+                    localStorage.setItem('safezone_push_token', token);
+                    console.log("✅ Push Token synced securely with server");
+                }
             }
         } else {
             console.warn("❌ Push permission was denied by user");
@@ -444,7 +446,16 @@ async function requestPushPermission() {
 }
 
 messaging.onMessage((payload) => {
-    console.log("Foreground Push:", payload);
+    console.log("Foreground Push Received:", payload);
+    
+    // מציג התראת פוש רשמית של המערכת גם כשהאפליקציה פתוחה
+    if (Notification.permission === 'granted') {
+        new Notification(payload.notification.title, {
+            body: payload.notification.body,
+            icon: 'https://cdn-icons-png.flaticon.com/512/1164/1164323.png',
+            requireInteraction: true
+        });
+    }
 });
 
 function handleJoinGroup(groupId) {
