@@ -28,7 +28,7 @@ function preserveJoinLinkForInstall() {
 
 preserveJoinLinkForInstall();
 
-const SERVER_URL = 'https://safezone-api-uozd.onrender.com';
+const SERVER_URL = 'http://188.191.147.160:3000';
 const socket = io(SERVER_URL);
 
 socket.on('connect', () => {
