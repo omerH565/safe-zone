@@ -28,7 +28,7 @@ function preserveJoinLinkForInstall() {
 
 preserveJoinLinkForInstall();
 
-const SERVER_URL = 'http://188.191.147.160:3000';
+const SERVER_URL = 'https://safezone-api.online';
 const socket = io(SERVER_URL);
 
 socket.on('connect', () => {
