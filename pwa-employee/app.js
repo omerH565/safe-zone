@@ -571,7 +571,7 @@ socket.on('group_member_status', (data) => {
                 </h4>
                 
                 <div style="display: flex; gap: 12px; align-items: center;">
-                    <button onclick="pingGroup('${groupId}')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef9a44; color: #ef9a44; padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; font-weight: bold; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                    <button onclick="pingGroup('${groupId}')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef9a44; color: #ef9a44; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
                         <span>🔔</span> שלח התראה
                     </button>
                     
