@@ -526,9 +526,16 @@ function handleJoinGroup(groupId) {
             name: currentUserName, 
             groupId: groupId, 
             targetCities: userCities 
+        }, (response) => {
+            // אם השרת ענה לנו עם השם האמיתי של הקבוצה
+            if (response && response.success) {
+                alert(`הצטרפת בהצלחה לקבוצה: ${response.groupName}`);
+            } else {
+                alert(`הצטרפת בהצלחה לקבוצה!`);
+            }
         });
-        
-        alert(`הצטרפת בהצלחה לקבוצה: ${groupId}`);
+    } else {
+        alert('אתה כבר חבר בקבוצה זו.');
     }
     
     localStorage.removeItem('pending_join_group');
@@ -547,7 +554,7 @@ function connectToServer() {
 }
 
 socket.on('group_member_status', (data) => {
-    const { userId, name, status, groupId } = data;
+    const { userId, name, status, groupId, groupName } = data;
     
     // מעדכן את הפאנל האישי למעלה ברגע שהשרת מחזיר את הסטטוס שלנו!
     if (userId === currentUserId) {
@@ -564,11 +571,12 @@ socket.on('group_member_status', (data) => {
         groupDiv = document.createElement('div'); 
         groupDiv.id = `group-${groupId}`; 
         groupDiv.className = 'group-card';
-        groupDiv.innerHTML = groupDiv.innerHTML = `
+        const displayTitle = groupName || groupId;
+        groupDiv.innerHTML = `
             <div class="group-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 8px; margin-bottom: 10px;">
                 <h4 onclick="toggleGroup('${groupId}')" style="margin: 0; color: #9ca3af; cursor: pointer; flex-grow: 1; display: flex; align-items: center; gap: 5px;">
-                    <span id="arrow-${groupId}">▼</span> ${groupId}
-                </h4>
+            <span id="arrow-${groupId}">▼</span> ${displayTitle}
+        </h4>
                 
                 <div style="display: flex; gap: 12px; align-items: center;">
                     <button onclick="pingGroup('${groupId}')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef9a44; color: #ef9a44; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
@@ -618,9 +626,23 @@ socket.on('group_member_status', (data) => {
 });
 
 document.getElementById('btn-create-group').addEventListener('click', () => {
-    const newGroupName = prompt('שם קבוצה (באנגלית, ללא רווחים):');
+    const newGroupName = prompt('הכנס שם לקבוצה החדשה (למשל: המשפחה של עומר):');
     if (newGroupName && newGroupName.trim() !== '') {
-        handleJoinGroup(newGroupName.trim().replace(/\s+/g, '_').toLowerCase());
+        // שולחים בקשה לשרת לייצר קבוצה עם מזהה מוצפן
+        socket.emit('create_group_secure', {
+            userId: currentUserId,
+            name: currentUserName,
+            groupDisplayName: newGroupName.trim(),
+            targetCities: userCities
+        }, (response) => {
+            if (response && response.success) {
+                userGroups.push(response.groupId);
+                localStorage.setItem('safeZone_groups', JSON.stringify(userGroups));
+                alert(`הקבוצה "${response.groupName}" נוצרה בהצלחה!`);
+            } else {
+                alert('שגיאה ביצירת הקבוצה. ודא חיבור לאינטרנט ונסה שוב.');
+            }
+        });
     }
 });
 
