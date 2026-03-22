@@ -4,6 +4,7 @@ const axios = require('axios');
 const http = require('http');
 const { Server } = require('socket.io');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 
 // --- הלוגיקה לטעינת הפיירבייס מ-Secret Files ב-Render ---
 let serviceAccount;

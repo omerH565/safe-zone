@@ -564,14 +564,16 @@ socket.on('group_member_status', (data) => {
         groupDiv = document.createElement('div'); 
         groupDiv.id = `group-${groupId}`; 
         groupDiv.className = 'group-card';
-        groupDiv.innerHTML = `
+        groupDiv.innerHTML = groupDiv.innerHTML = `
             <div class="group-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #374151; padding-bottom: 8px; margin-bottom: 10px;">
                 <h4 onclick="toggleGroup('${groupId}')" style="margin: 0; color: #9ca3af; cursor: pointer; flex-grow: 1; display: flex; align-items: center; gap: 5px;">
                     <span id="arrow-${groupId}">▼</span> ${groupId}
                 </h4>
                 
                 <div style="display: flex; gap: 12px; align-items: center;">
-                    <button onclick="pingGroup('${groupId}')" style="background: none; border: none; color: #eab308; cursor: pointer; font-size: 1.2rem; padding: 0;">🔔</button>
+                    <button onclick="pingGroup('${groupId}')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef9a44; color: #ef9a44; padding: 6px 12px; border-radius: 6px; font-size: 0.9rem; font-weight: bold; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                        <span>🔔</span> שלח התראה
+                    </button>
                     
                     <div style="position: relative;">
                         <button onclick="toggleDropdown('${groupId}', event)" style="background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.2rem; padding: 0 5px; font-weight: bold;">⋮</button>
