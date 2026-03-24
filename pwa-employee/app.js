@@ -579,7 +579,7 @@ socket.on('group_member_status', (data) => {
         </h4>
                 
                 <div style="display: flex; gap: 12px; align-items: center;">
-                    <button onclick="pingGroup('${groupId}')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef9a44; color: #ef9a44; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                    <button onclick="pingGroup('${groupId}', '${groupName}')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef9a44; color: #ef9a44; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-family: inherit; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
                         <span>🔔</span> שלח התראה
                     </button>
                     
@@ -652,8 +652,9 @@ window.copyInviteLink = function(groupId) {
     });
 };
 
-window.pingGroup = async function(groupId) {
-    if(confirm(`בקשת עדכון מכולם בקבוצת ${groupId}?`)) {
+window.pingGroup = async function(groupId, groupName = groupId) {
+    // 👇 כאן החלפנו ל-groupName כדי שהפופ-אפ יהיה יפה
+    if(confirm(`בקשת עדכון מכולם בקבוצת ${groupName}?`)) {
         try {
             await fetch(`${SERVER_URL}/api/ping-group`, { 
                 method: 'POST', 
@@ -796,7 +797,9 @@ socket.on('ping_alert_for_user', (data) => {
         // התיקון העיצובי: לא מסתירים יותר את הבאנר של האזעקה!
         document.getElementById('all-clear-banner').classList.add('hidden');
         
-        document.getElementById('ping-message').innerText = `${data.senderName} מבקש עדכון ב-${data.groupId}`;
+        // 🚨 התיקון הכירורגי: משתמשים ב-data.groupName במקום data.groupId!
+        const displayName = data.groupName || data.groupId;
+        document.getElementById('ping-message').innerText = `${data.senderName} מבקש עדכון ב-${displayName}`;
         
         // מציגים את כפתורי הדיווח (ירוק/אדום)
         document.querySelector('.action-buttons').classList.remove('hidden');
